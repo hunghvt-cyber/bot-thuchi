@@ -1,0 +1,44 @@
+name: Deploy Apps Script
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: apps-script-production
+  cancel-in-progress: false
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Test money parser
+        run: node tests/test-money-parser.js
+      - name: Restore clasp credentials
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ]; then
+            echo "::error::Missing GitHub Actions secret CLASPRC_JSON"
+            exit 1
+          fi
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+      - name: Push source to Apps Script
+        run: npx --yes @google/clasp@3.4.1 push --force
+      - name: Redeploy existing Web App
+        env:
+          DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+        run: |
+          if [ -n "$DEPLOYMENT_ID" ]; then
+            npx --yes @google/clasp@3.4.1 update-deployment "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA}"
+          else
+            echo "No APPS_SCRIPT_DEPLOYMENT_ID yet; source push completed."
+          fi
