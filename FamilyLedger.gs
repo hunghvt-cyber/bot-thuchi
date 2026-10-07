@@ -28,7 +28,7 @@ function parseMoneyLocal_(text) {
 function guessCategoryLocal_(text) {
   var s=String(text).toLowerCase();
   if(/chợ|siêu thị|thực phẩm/.test(s)) return 'Đi chợ';
-  if(/cafe|coffee|cà phê|ăn|cơm|phở|bún|nhậu|trà sữa/.test(s)) return 'Ăn uống';
+  if(/cafe|coffee|cà phê|ăn|cơm|phở|bún|mì tôm|mì gói|mì ăn liền|hủ tiếu|bánh mì|nhậu|trà sữa/.test(s)) return 'Ăn uống';
   if(/xăng|grab|taxi|vé xe|gửi xe/.test(s)) return 'Đi lại';
   if(/điện|nước|internet|wifi|điện thoại/.test(s)) return 'Hóa đơn';
   if(/học|sách|học phí/.test(s)) return 'Giáo dục';
