@@ -33,13 +33,6 @@ jobs:
           chmod 600 "$HOME/.clasprc.json"
       - name: Push source to Apps Script
         run: npx --yes @google/clasp@3.4.1 push --force
-      - name: Redeploy existing Web App
-        env:
-          DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
-        run: |
-          if [ -n "$DEPLOYMENT_ID" ]; then
-            npx --yes @google/clasp@3.4.1 update-deployment "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA}"
-          else
-            echo "No APPS_SCRIPT_DEPLOYMENT_ID yet; source push completed."
-          fi
+      - name: Redeploy Web App
+        run: npx --yes @google/clasp@3.4.1 update-deployment "AKfycbyaTgOIeeNkUEUoqsQcEaI_LPSFh8V4Rf28gxXppiTWCpxM8Eirm-wsQH_JMV9kmXyh" --description "GitHub ${GITHUB_SHA}"
 # CI/CD source of truth: GitHub main -> Apps Script
