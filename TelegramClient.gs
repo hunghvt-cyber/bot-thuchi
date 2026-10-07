@@ -1,40 +1,17 @@
-function sendMessage(chatId, text, replyMarkup) {
-  var token = getBotToken();
-  if (!token) throw new Error('Missing BOT_TOKEN');
-
-  var payload = {
-    chat_id: chatId,
-    text: String(text),
-    parse_mode: 'HTML',
-  };
-  if (replyMarkup != null) {
-    payload.reply_markup = replyMarkup;
-  }
-
-  UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true,
-  });
+function telegramApi_(method,payload){
+  var token=getBotToken();
+  if(!token) throw new Error('Thiếu BOT_TOKEN');
+  var r=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'post',contentType:'application/json',payload:JSON.stringify(payload||{}),muteHttpExceptions:true});
+  if(r.getResponseCode()<200||r.getResponseCode()>=300) throw new Error('Telegram '+method+' HTTP '+r.getResponseCode()+': '+r.getContentText());
+  return JSON.parse(r.getContentText());
 }
-
-/** @param {string|number} chatId @param {string} text @param {Object=} keyBoard */
-function sendText(chatId, text, keyBoard) {
-  sendMessage(chatId, formatNumberWithSeparator(String(text)), keyBoard);
+function sendText(chatId,text,extra){
+  var p={chat_id:String(chatId),text:String(text),parse_mode:'HTML'};
+  if(extra) Object.keys(extra).forEach(function(k){p[k]=extra[k];});
+  return telegramApi_('sendMessage',p);
 }
-
-function answerCallbackQuery(callbackQueryId, text) {
-  var token = getBotToken();
-  if (!token) return;
-
-  UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/answerCallbackQuery', {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify({
-      callback_query_id: callbackQueryId,
-      text: text || '',
-    }),
-    muteHttpExceptions: true,
-  });
+function setWebhook(){
+  var url=getWebAppUrl();
+  if(!url) throw new Error('Thiếu WEB_APP_URL');
+  return telegramApi_('setWebhook',{url:url,allowed_updates:['message']});
 }
