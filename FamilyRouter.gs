@@ -21,7 +21,7 @@ function doGet(e){
   try{
     if(e&&e.parameter&&e.parameter.bootstrap==='1'){
       var r=setupFamilyBot();
-      return ContentService.createTextOutput(JSON.stringify({ok:true,webApp:getWebAppUrl(),telegram:r&&r.ok===true})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({ok:true,webApp:getWebAppUrl(),telegram:r&&r.ok===true,webhook:r&&r.webhook||''})).setMimeType(ContentService.MimeType.JSON);
     }
     return ContentService.createTextOutput('Poorman Telebot: OK');
   }catch(err){
