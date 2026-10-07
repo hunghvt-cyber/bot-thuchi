@@ -42,3 +42,4 @@ jobs:
           else
             echo "No APPS_SCRIPT_DEPLOYMENT_ID yet; source push completed."
           fi
+# CI/CD source of truth: GitHub main -> Apps Script
