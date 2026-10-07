@@ -1,0 +1,8 @@
+**/**
+!appsscript.json
+!Config.gs
+!FamilyConfig.gs
+!FamilyLedger.gs
+!FamilyRouter.gs
+!Setup.gs
+!TelegramClient.gs
