@@ -2,7 +2,7 @@ function getScriptProp_(key) { return PropertiesService.getScriptProperties().ge
 function getBotToken() { return getScriptProp_('BOT_TOKEN') || ''; }
 function getGeminiApiKey() { return getScriptProp_('GEMINI_API_KEY') || ''; }
 function getMainSpreadsheetId() { return getScriptProp_('GOOGLE_SPREADSHEET_ID') || ''; }
-function getWebAppUrl() { return getScriptProp_('WEB_APP_URL') || ScriptApp.getService().getUrl() || ''; }
+function getWebAppUrl() { return getScriptProp_('WEB_APP_URL') || 'https://script.google.com/macros/s/AKfycbyaTgOIeeNkUEUoqsQcEaI_LPSFh8V4Rf28gxXppiTWCpxM8Eirm-wsQH_JMV9kmXyh/exec'; }
 function setFamilyGroupId_(chatId) { PropertiesService.getScriptProperties().setProperty('FAMILY_GROUP_ID', String(chatId)); }
 function getFamilyGroupId() { return getScriptProp_('FAMILY_GROUP_ID') || ''; }
 function getGeminiModel() { return getScriptProp_('GEMINI_MODEL') || 'gemini-2.5-flash'; }
