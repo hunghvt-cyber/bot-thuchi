@@ -17,3 +17,5 @@ function setWebhook(){
   if(!url) throw new Error('Thiếu WEB_APP_URL');
   return telegramApi_('setWebhook',{url:url,allowed_updates:['message']});
 }
+
+function getWebhookInfo(){ return telegramApi_('getWebhookInfo',{}); }
