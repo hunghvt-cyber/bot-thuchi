@@ -3,7 +3,12 @@ function setupFamilyBot(){
   if(!getBotToken())throw new Error('Thiếu BOT_TOKEN');
   if(!getGeminiApiKey())throw new Error('Thiếu GEMINI_API_KEY');
   if(!getWebAppUrl())throw new Error('Thiếu WEB_APP_URL');
-  var result=setWebhook();Logger.log(JSON.stringify(result));return result;
+  var result=setWebhook();
+  var info=getWebhookInfo();
+  var actual=info&&info.result&&info.result.url||'';
+  if(actual!==getWebAppUrl())throw new Error('Webhook URL mismatch: '+actual);
+  var out={ok:true,setWebhook:result.ok===true,webhook:actual};
+  Logger.log(JSON.stringify(out));return out;
 }
 function healthCheck(){return {spreadsheet:!!getMainSpreadsheetId(),bot:!!getBotToken(),gemini:!!getGeminiApiKey(),webApp:!!getWebAppUrl(),group:familyGroupId_()||'ANY'};}
 function testMoneyParser(){
