@@ -1,7 +1,7 @@
 function parseMoneyLocal_(text) {
   var s=String(text||'').toLowerCase().replace(/,/g,'.');
   var m=s.match(/(\d+)\s*(?:tr|triệu|củ)\s*(\d{1,3})?(?!\w)/i);
-  if(m) return Number(m[1])*1000000+(m[2]?Number(m[2])*Math.pow(10,6-m[2].length):0);
+  if(m){ if(m[2]) return Math.round(parseFloat(m[1]+'.'+m[2])*1000000); return Number(m[1])*1000000+(m[3]?Number(m[3])*Math.pow(10,6-m[3].length):0); }
   m=s.match(/(\d+(?:\.\d+)?)\s*(nghìn|ngàn|k)\b/i);
   if(m) return Math.round(parseFloat(m[1])*1000);
   m=s.match(/(?:^|\s)(\d{2,4})(?:\s|$)/);
