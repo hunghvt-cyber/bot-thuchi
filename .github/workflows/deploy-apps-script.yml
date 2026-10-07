@@ -35,4 +35,9 @@ jobs:
         run: npx --yes @google/clasp@3.4.1 push --force
       - name: Redeploy Web App
         run: npx --yes @google/clasp@3.4.1 update-deployment "AKfycbyaTgOIeeNkUEUoqsQcEaI_LPSFh8V4Rf28gxXppiTWCpxM8Eirm-wsQH_JMV9kmXyh" --description "GitHub ${GITHUB_SHA}"
+      - name: Ensure Telegram webhook
+        run: |
+          RESPONSE="$(curl --fail --silent --show-error --location "https://script.google.com/macros/s/AKfycbyaTgOIeeNkUEUoqsQcEaI_LPSFh8V4Rf28gxXppiTWCpxM8Eirm-wsQH_JMV9kmXyh/exec?bootstrap=1")"
+          echo "$RESPONSE"
+          echo "$RESPONSE" | grep -q '"ok":true'
 # CI/CD source of truth: GitHub main -> Apps Script
