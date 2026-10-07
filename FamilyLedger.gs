@@ -1,14 +1,28 @@
 function parseMoneyLocal_(text) {
-  var s=String(text||'').toLowerCase().replace(/,/g,'.');
-  var m=s.match(/(?:^|[^\\d.])(\\d+)(?:\\.(\\d+))?\\s*(?:tr|triệu|củ)\\s*(\\d{1,3})?(?=$|[^\\w])/i);
-  if(m) {
-    if(m[2]) return Math.round(parseFloat(m[1]+'.'+m[2])*1000000);
-    return Number(m[1])*1000000+(m[3]?Number(m[3])*Math.pow(10,6-m[3].length):0);
+  var s = String(text || '').toLowerCase().replace(/,/g, '.').trim();
+  var m;
+
+  // 1.5tr / 1,5tr / 2.25 triệu
+  m = s.match(/(?:^|[^\d.])(\d+)\.(\d+)\s*(?:tr|triệu|củ)(?=$|[^\w])/i);
+  if (m) return Math.round(Number(m[1] + '.' + m[2]) * 1000000);
+
+  // 2tr5 = 2.5m; 1tr350 = 1.35m
+  m = s.match(/(?:^|[^\d])(\d+)\s*(?:tr|triệu|củ)\s*(\d{1,3})?(?=$|[^\w])/i);
+  if (m) {
+    var amount = Number(m[1]) * 1000000;
+    if (m[2]) amount += Number(m[2]) * Math.pow(10, 6 - m[2].length);
+    return amount;
   }
-  m=s.match(/(\\d+(?:\\.\\d+)?)\\s*(nghìn|ngàn|k)\\b/i);
-  if(m) return Math.round(parseFloat(m[1])*1000);
-  m=s.match(/(?:^|\\s)(\\d{2,4})(?:\\s|$)/);
-  if(m) return Number(m[1])*1000;
+
+  // 45k / 45 nghìn / 1.5k
+  m = s.match(/(?:^|[^\d.])(\d+(?:\.\d+)?)\s*(?:nghìn|ngàn|k)(?=$|[^\w])/i);
+  if (m) return Math.round(Number(m[1]) * 1000);
+
+  // Household shorthand: a bare 2-4 digit amount means thousands: 630 => 630,000.
+  // Word boundaries allow "cafe 2 đứa 85" to select 85 while ignoring the one-digit headcount.
+  m = s.match(/\b(\d{2,4})\b/);
+  if (m) return Number(m[1]) * 1000;
+
   return null;
 }
 function guessCategoryLocal_(text) {
