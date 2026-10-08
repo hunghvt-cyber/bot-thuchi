@@ -1,0 +1,38 @@
+name: Test direct Apps Script webhook (isolated)
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_id:
+        description: "Existing TEST web-app deployment ID (optional; omit to push only)"
+        required: false
+        type: string
+permissions:
+  contents: read
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Restore existing clasp credentials
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          test -n "$CLASPRC_JSON" || { echo "::error::Missing CLASPRC_JSON"; exit 1; }
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+      - name: Configure isolated Apps Script target
+        working-directory: experiments/direct-webhook
+        run: |
+          printf '{"scriptId":"1bZPB4JI11VRZJA1aoGkNZ2JOo4_hWXlqsenGd6902yOikX_oKG74jPoP","rootDir":"."}\n' > .clasp.json
+      - name: Push test code
+        working-directory: experiments/direct-webhook
+        run: npx --yes @google/clasp@3.4.1 push --force
+      - name: Update existing TEST web app only
+        if: ${{ inputs.deployment_id != '' }}
+        working-directory: experiments/direct-webhook
+        env:
+          DEPLOYMENT_ID: ${{ inputs.deployment_id }}
+        run: npx --yes @google/clasp@3.4.1 update-deployment "$DEPLOYMENT_ID" --description "Isolated webhook test ${GITHUB_SHA}"
