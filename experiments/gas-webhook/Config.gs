@@ -7,4 +7,3 @@ function getWebAppUrl(){return 'https://script.google.com/macros/s/AKfycby9V-wbb
 function setFamilyGroupId_(chatId){PropertiesService.getScriptProperties().setProperty('FAMILY_GROUP_ID',String(chatId));}
 function getFamilyGroupId(){return getScriptProp_('FAMILY_GROUP_ID')||'';}
 function getGeminiModel(){return getScriptProp_('GEMINI_MODEL')||'gemini-2.5-flash';}
-function familyGroupId_(){return getFamilyGroupId();}
