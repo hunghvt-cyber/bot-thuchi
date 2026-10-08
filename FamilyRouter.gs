@@ -55,11 +55,11 @@ function doGet(e){
   try{
     if(e&&e.parameter&&e.parameter.diagnostic==='1'){
       var info=getWebhookInfo().result||{};
-      return ContentService.createTextOutput(JSON.stringify({ok:true,webhookMatches:info.url===getWebAppUrl(),pending:info.pending_update_count||0,lastError:info.last_error_message||'',groupConfigured:!!familyGroupId_(),commands:registerFamilyCommands_().result.length})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({ok:true,mode:info.url?'webhook':'polling',pending:info.pending_update_count||0,lastError:info.last_error_message||'',groupConfigured:!!familyGroupId_(),pollTriggers:ScriptApp.getProjectTriggers().filter(function(t){return t.getHandlerFunction()==='pollFamilyTelegram_';}).length,commands:registerFamilyCommands_().result.length})).setMimeType(ContentService.MimeType.JSON);
     }
     if(e&&e.parameter&&e.parameter.bootstrap==='1'){
       var r=setupFamilyBot();
-      return ContentService.createTextOutput(JSON.stringify({ok:true,webApp:getWebAppUrl(),telegram:r&&r.ok===true,webhook:r&&r.webhook||''})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({ok:true,webApp:getWebAppUrl(),telegram:r&&r.ok===true,mode:r&&r.mode||'',pollIntervalMinutes:r&&r.pollIntervalMinutes||0})).setMimeType(ContentService.MimeType.JSON);
     }
     return ContentService.createTextOutput('Poorman Telebot: OK');
   }catch(err){
