@@ -9,6 +9,14 @@ function doPost(e) {
     diagnostic.update_id=update.update_id;
     diagnostic.message_type=msg ? (msg.text ? 'text' : 'non_text') : 'no_message';
     diagnostic.has_token=!!token;
+    diagnostic.chat_id=msg && msg.chat ? String(msg.chat.id) : null;
+    diagnostic.chat_type=msg && msg.chat ? msg.chat.type : null;
+    if(token) {
+      var me=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/getMe',{muteHttpExceptions:true});
+      var meJson=JSON.parse(me.getContentText());
+      diagnostic.bot_username=meJson.ok && meJson.result ? meJson.result.username : null;
+      diagnostic.get_me_http=me.getResponseCode();
+    }
     if(msg && msg.text && token) {
       var r=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/sendMessage',{
         method:'post',payload:{chat_id:msg.chat.id,text:'Webhook OK ('+(Date.now()-start)+'ms): '+msg.text},
