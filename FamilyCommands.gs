@@ -63,23 +63,38 @@ function familyEditById_(msg,cmd,text){
 }
 function familyClearMessages_(msg){
   if(!familyAdmin_(msg)){sendText(msg.chat.id,'Chỉ quản trị viên nhóm được dùng /clear.');return;}
-  var chatId=String(msg.chat.id),rows=familySheet_().getDataRange().getValues(),ids={},count=0,failed=0;
-  // Telegram only allows deletion of most messages younger than 48 hours.
+  var chatId=String(msg.chat.id),props=PropertiesService.getScriptProperties(),ids={},count=0,failed=0;
   var cutoff=Date.now()-47*60*60*1000;
+  var rows=familySheet_().getDataRange().getValues();
   for(var i=1;i<rows.length;i++){
     var r=rows[i],date=new Date(r[0]);
-    if(String(r[9])===chatId&&r[16]&&date.getTime()>=cutoff)ids[String(r[16])]=true;
+    if(String(r[9])!==chatId||date.getTime()<cutoff)continue;
+    if(r[10])ids[String(r[10])]=true;
+    if(r[16])ids[String(r[16])]=true;
   }
-  var stored=PropertiesService.getScriptProperties().getProperty('BOT_MSG_IDS_'+chatId);
-  if(stored){try{JSON.parse(stored).forEach(function(x){if(x.time>=cutoff)ids[String(x.id)]=true;});}catch(ignore){}}
-  var keys=Object.keys(ids).slice(-150);
+  ['BOT_MSG_IDS_','USER_MSG_IDS_'].forEach(function(prefix){
+    var stored=props.getProperty(prefix+chatId);
+    if(!stored)return;
+    try{JSON.parse(stored).forEach(function(x){if(x.time>=cutoff)ids[String(x.id)]=true;});}catch(e){Logger.log(e);}
+  });
+  ids[String(msg.message_id)]=true;
+  var keys=Object.keys(ids).filter(function(x){return /^\d+$/.test(x);}).sort(function(a,b){return Number(b)-Number(a);}).slice(0,180);
   keys.forEach(function(id){
     try{telegramApi_('deleteMessage',{chat_id:chatId,message_id:Number(id)});count++;}
     catch(e){failed++;Logger.log('deleteMessage '+id+': '+e);}
   });
-  try{telegramApi_('deleteMessage',{chat_id:chatId,message_id:msg.message_id});}catch(ignore){}
-  PropertiesService.getScriptProperties().deleteProperty('BOT_MSG_IDS_'+chatId);
-  sendText(chatId,'Đã dọn '+count+' tin nhắn bot. '+(failed?'Không xóa được '+failed+' tin (quá 48 giờ hoặc thiếu quyền). ':'')+'Giao dịch trong Sheets không bị ảnh hưởng. Dùng /giaodich để xem mã giao dịch.');
+  props.deleteProperty('BOT_MSG_IDS_'+chatId);
+  props.deleteProperty('USER_MSG_IDS_'+chatId);
+  sendText(chatId,'Đã dọn '+count+' tin nhắn của bot và thành viên mà bot đã ghi nhận.'+(failed?' Không xóa được '+failed+' tin (quá 48 giờ hoặc thiếu quyền).':'')+' Dữ liệu chi tiêu trong Sheets vẫn được giữ nguyên.');
+}
+function familyRememberUserMessage_(msg){
+  if(!msg||!msg.chat||!msg.message_id)return;
+  var chatId=String(msg.chat.id),props=PropertiesService.getScriptProperties(),key='USER_MSG_IDS_'+chatId,items=[];
+  try{items=JSON.parse(props.getProperty(key)||'[]');}catch(ignore){}
+  var cutoff=Date.now()-47*60*60*1000;
+  items=items.filter(function(x){return x.time>=cutoff;}).slice(-180);
+  items.push({id:msg.message_id,time:Date.now()});
+  props.setProperty(key,JSON.stringify(items));
 }
 function familyResetTests_(msg,text){
   if(!familyAdmin_(msg)){sendText(msg.chat.id,'Chỉ quản trị viên nhóm được xóa dữ liệu thử nghiệm.');return;}
