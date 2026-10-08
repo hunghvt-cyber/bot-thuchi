@@ -6,3 +6,5 @@
 !FamilyRouter.gs
 !Setup.gs
 !TelegramClient.gs
+
+!FamilyCommands.gs
