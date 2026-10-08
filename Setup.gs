@@ -4,6 +4,8 @@ function setupFamilyBot(){
   if(!getGeminiApiKey())throw new Error('Thiếu GEMINI_API_KEY');
   if(!getWebAppUrl())throw new Error('Thiếu WEB_APP_URL');
   var result=setWebhook();
+  var commands=registerFamilyCommands_();
+  if(!commands.result||!commands.result.length)throw new Error('Telegram commands not registered');
   var info=getWebhookInfo();
   var actual=info&&info.result&&info.result.url||'';
   if(actual!==getWebAppUrl())throw new Error('Webhook URL mismatch: '+actual);
