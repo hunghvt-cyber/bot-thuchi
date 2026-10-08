@@ -41,3 +41,8 @@ jobs:
           echo "$RESPONSE"
           echo "$RESPONSE" | grep -q '"ok":true'
 # CI/CD source of truth: GitHub main -> Apps Script
+
+      - name: Diagnose Telegram delivery
+        run: |
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 45 'https://script.google.com/macros/s/AKfycbyaTgOIeeNkUEUoqsQcEaI_LPSFh8V4Rf28gxXppiTWCpxM8Eirm-wsQH_JMV9kmXyh/exec?diagnostic=1'
+          echo
