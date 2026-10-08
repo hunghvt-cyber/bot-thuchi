@@ -37,6 +37,7 @@ function pollFamilyTelegram_(){
       props.setProperty('TELEGRAM_UPDATE_OFFSET',String(update.update_id+1));
     }
     props.setProperty('POLL_LAST_SUCCESS',new Date().toISOString());
+    try{sendFamilyDailyReportIfDue_();}catch(reportError){props.setProperty('DAILY_REPORT_LAST_ERROR',String(reportError.message||reportError).slice(0,250));Logger.log('Daily report: '+(reportError.stack||reportError));}
   }catch(err){
     PropertiesService.getScriptProperties().setProperty('POLL_LAST_ERROR',String(err.message||err).slice(0,250));
     throw err;
@@ -62,4 +63,37 @@ function testMoneyParser(){
     if (got !== test[1]) throw new Error(test[0]+' expected '+test[1]+' got '+got);
   });
   return 'PASS ('+cases.length+' cases)';
+}
+
+// Runs inside the existing one-minute polling trigger; no additional trigger needed.
+// Lock in pollFamilyTelegram_ serializes checks. Retry on subsequent polls if sending fails.
+function sendFamilyDailyReportIfDue_(){
+  var now=new Date(),tz='Asia/Ho_Chi_Minh';
+  if(Number(Utilities.formatDate(now,tz,'HH'))!==21)return;
+  var date=Utilities.formatDate(now,tz,'yyyy-MM-dd');
+  var props=PropertiesService.getScriptProperties();
+  if(props.getProperty('DAILY_REPORT_SENT_DATE')===date)return;
+  var chatId=familyGroupId_();
+  if(!chatId)throw new Error('Chưa cấu hình FAMILY_GROUP_ID cho báo cáo tự động');
+  var data=familySheet_().getDataRange().getValues();
+  var totalToday=0,totalMonth=0;
+  var month=date.slice(0,7);
+  for(var i=1;i<data.length;i++){
+    var r=data[i];
+    if(r[4]!=='ChiTieu'||String(r[15])==='DELETED')continue;
+    var d=new Date(r[0]);if(isNaN(d.getTime()))continue;
+    var day=Utilities.formatDate(d,tz,'yyyy-MM-dd');
+    if(day.slice(0,7)!==month||day>date)continue;
+    var amount=Number(r[7])||0;
+    totalMonth+=amount;
+    if(day===date)totalToday+=amount;
+  }
+  var days=Number(date.slice(8,10));
+  var message='<b>BÁO CÁO CHI TIÊU — '+date.slice(8,10)+'/'+date.slice(5,7)+'/'+date.slice(0,4)+'</b>'+ 
+    '\\nChi tiêu hôm nay: <b>'+formatVnd_(totalToday)+'</b>'+ 
+    '\\nTrung bình/ngày trong tháng: <b>'+formatVnd_(totalMonth/days)+'</b>'+ 
+    '\\nTổng chi tiêu tháng: <b>'+formatVnd_(totalMonth)+'</b>';
+  sendText(chatId,message);
+  props.setProperty('DAILY_REPORT_SENT_DATE',date);
+  props.deleteProperty('DAILY_REPORT_LAST_ERROR');
 }
