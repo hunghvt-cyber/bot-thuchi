@@ -9,7 +9,7 @@ jobs:
     steps:
       - name: Probe GET and POST without Telegram token
         env:
-          WEB_APP_URL: https://script.google.com/macros/s/AKfycbzjru1Ik0ULvnLyoROcAESctisHoxGy0eI056Mxwt1tUrwiQIBCeKtICARZZskodSJX/exec
+          WEB_APP_URL: https://script.google.com/macros/s/AKfycbyz9lklOUobi-ghu4ZmRhFXJuI5GiHKfaCTb5Ss88GMigeMqxkhvixyKY4HtPcA-C-d/exec
         run: |
           set -euo pipefail
           echo '=== GET (no redirect) ==='
