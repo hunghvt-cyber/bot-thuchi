@@ -18,18 +18,27 @@ function pollFamilyTelegram_(){
   var lock=LockService.getScriptLock();
   if(!lock.tryLock(1000))return;
   try{
-    var props=PropertiesService.getScriptProperties(),offset=Number(props.getProperty('TELEGRAM_UPDATE_OFFSET')||0);
+    var props=PropertiesService.getScriptProperties();
+    props.setProperty('POLL_LAST_START',new Date().toISOString());
+    props.deleteProperty('POLL_LAST_ERROR');
+    var offset=Number(props.getProperty('TELEGRAM_UPDATE_OFFSET')||0);
     var updates=telegramApi_('getUpdates',{offset:offset,limit:30,timeout:0,allowed_updates:['message']}).result||[];
+    props.setProperty('POLL_LAST_BATCH_SIZE',String(updates.length));
     for(var i=0;i<updates.length;i++){
       var update=updates[i];
       try{
         if(update.message)handleFamilyMessage_(update.message);
       }catch(err){
+        props.setProperty('POLL_LAST_ERROR',String(err.message||err).slice(0,250));
         Logger.log('Telegram update '+update.update_id+': '+(err.stack||err));
         try{if(update.message&&update.message.chat)sendText(update.message.chat.id,'Lỗi xử lý: '+escapeHtml_(String(err.message||err).slice(0,180)));}catch(ignore){}
       }
       props.setProperty('TELEGRAM_UPDATE_OFFSET',String(update.update_id+1));
     }
+    props.setProperty('POLL_LAST_SUCCESS',new Date().toISOString());
+  }catch(err){
+    PropertiesService.getScriptProperties().setProperty('POLL_LAST_ERROR',String(err.message||err).slice(0,250));
+    throw err;
   }finally{lock.releaseLock();}
 }
 function healthCheck(){return {spreadsheet:!!getMainSpreadsheetId(),bot:!!getBotToken(),gemini:!!getGeminiApiKey(),webApp:!!getWebAppUrl(),group:familyGroupId_()||'ANY'};}
