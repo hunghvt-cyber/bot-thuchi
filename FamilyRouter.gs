@@ -18,21 +18,30 @@ function handleFamilyMessage_(msg){
       '• /baocaotuan — tuần này\n'+
       '• /baocaothang — tháng này\n'+
       '• /baocaonam — năm nay\n'+
-      '• /mine — chi tiêu của tôi trong tháng\n\n'+
+      '• /mine — chi tiêu của tôi trong tháng\n'+
+      '• /giaodich — xem giao dịch và mã\n\n'+
       '<b>3. Sửa hoặc xóa</b>\n'+
       'Nhấn Reply vào tin nhắn xác nhận của bot (hoặc tin nhắn chi tiêu gốc), rồi gửi:\n'+
       '• <code>sửa danh mục Ăn uống</code>\n'+
       '• <code>sửa tiền 15k</code>\n'+
       '• <code>sửa nội dung Mì tôm Hảo Hảo</code>\n'+
       '• <code>xóa</code> — xóa mềm, không mất dữ liệu\n'+
-      '• <code>khôi phục</code> — khôi phục giao dịch đã xóa\n\n'+
-      '<b>4. Lưu ý</b>\n'+
+      '• <code>khôi phục</code> — khôi phục giao dịch đã xóa\n'+
+      'Không cần Reply: <code>/xoa #mã</code>, <code>/khoiphuc #mã</code>, <code>/suatien #mã 15k</code>, <code>/suadanhmuc #mã Ăn uống</code>, <code>/suanoidung #mã nội dung mới</code>. Lấy mã bằng /giaodich.\n\n'+
+      '<b>4. Dọn dẹp</b>\n'+
+      '• /clear — quản trị viên xóa tin nhắn bot còn xóa được (thường trong 48 giờ), không xóa giao dịch.\n'+
+      '• /resettests — quản trị viên xóa mềm toàn bộ giao dịch cũ sau xác nhận.\n\n'+
+      '<b>5. Lưu ý</b>\n'+
       '• Chỉ người tạo giao dịch được sửa, xóa hoặc khôi phục.\n'+
       '• Giao dịch đã xóa không tính vào báo cáo.\n'+
       '• Có thể Reply lại tin nhắn xác nhận cũ để khôi phục.\n'+
       '• /whoami — xem ID người dùng và nhóm.\n'+
       '• /help — xem hướng dẫn này.'
     );return true;}
+  if(cmd==='/giaodich'){familyListTransactions_(msg);return true;}
+  if(cmd==='/clear'){familyClearMessages_(msg);return true;}
+  if(cmd==='/resettests'){familyResetTests_(msg,text);return true;}
+  if(['/xoa','/khoiphuc','/suatien','/suadanhmuc','/suanoidung'].indexOf(cmd)>=0){familyEditById_(msg,cmd,text);return true;}
   if(cmd==='/whoami'){if(!familyGroupId_()&&(msg.chat.type==='group'||msg.chat.type==='supergroup'))setFamilyGroupId_(chatId);sendText(chatId,'User ID: <code>'+msg.from.id+'</code>\nGroup ID: <code>'+chatId+'</code>\nFamily group: <b>'+((String(familyGroupId_())===String(chatId))?'BOUND':'NOT BOUND')+'</b>');return true;}
   if(cmd==='/baocaongay'||cmd==='/baocaotuan'||cmd==='/baocaothang'||cmd==='/baocaonam'){var p={'/baocaongay':'day','/baocaotuan':'week','/baocaothang':'month','/baocaonam':'year'};sendText(chatId,familyReport_(p[cmd]));return true;}
   if(msg.reply_to_message&&familyEditReply_(msg,text))return true;
