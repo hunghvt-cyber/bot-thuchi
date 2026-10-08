@@ -69,6 +69,7 @@ function familySummary_(period,payerId){
   for(var i=1;i<data.length;i++){var d=new Date(data[i][0]);if(isNaN(d.getTime()))continue;
     if(period==='today'&&Utilities.formatDate(d,'Asia/Ho_Chi_Minh','yyyyMMdd')!==Utilities.formatDate(now,'Asia/Ho_Chi_Minh','yyyyMMdd'))continue;
     if(period==='month'&&(d.getMonth()!==now.getMonth()||d.getFullYear()!==now.getFullYear()))continue;
+    if(String(data[i][15])==='DELETED')continue;
     if(payerId&&String(data[i][2])!==String(payerId))continue;if(data[i][4]!=='ChiTieu')continue;
     var a=Number(data[i][7])||0;total+=a;cats[data[i][5]]=(cats[data[i][5]]||0)+a;}
   var lines=Object.keys(cats).sort(function(a,b){return cats[b]-cats[a]}).map(function(k){return '• '+escapeHtml_(k)+': '+formatVnd_(cats[k]);});
@@ -76,3 +77,80 @@ function familySummary_(period,payerId){
 }
 function formatVnd_(n){return Math.round(Number(n||0)).toLocaleString('vi-VN')+'đ';}
 function escapeHtml_(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+
+function familyAuditSheet_(){
+  var ss=familySpreadsheet_(),sh=ss.getSheetByName('AuditLog')||ss.insertSheet('AuditLog');
+  if(!sh.getLastRow())sh.appendRow(['Timestamp','ActorId','TransactionId','Action','Before','After']);
+  return sh;
+}
+function familyFindReplyRow_(msg){
+  var ref=msg.reply_to_message;
+  if(!ref)return null;
+  var sh=familySheet_(),data=sh.getDataRange().getValues();
+  for(var i=data.length-1;i>=1;i--){
+    if(String(data[i][9])!==String(msg.chat.id))continue;
+    if(String(data[i][10])===String(ref.message_id)||String(data[i][16])===String(ref.message_id))
+      return {sheet:sh,row:i+1,values:data[i]};
+  }
+  return null;
+}
+function familyEditReply_(msg,text){
+  var action=String(text).trim(),low=action.toLowerCase();
+  var match=low.match(/^sửa\s+(danh mục|tiền|số tiền|nội dung)\s+(.+)$/i);
+  var remove=/^(xóa|xoá)$/i.test(action),restore=/^khôi phục$/i.test(action);
+  if(!match&&!remove&&!restore)return false;
+  var found=familyFindReplyRow_(msg);
+  if(!found){sendText(msg.chat.id,'Hãy Reply vào tin nhắn giao dịch của bot hoặc tin nhắn chi tiêu gốc.');return true;}
+  var sh=found.sheet,row=found.row,v=found.values;
+  if(String(v[2])!==String(msg.from.id)){sendText(msg.chat.id,'Chỉ người tạo giao dịch được sửa hoặc xóa.');return true;}
+  var status=String(v[15]||'ACTIVE');
+  if(status==='DELETED'&&!restore){sendText(msg.chat.id,'Giao dịch đã xóa. Reply <code>khôi phục</code> để phục hồi.');return true;}
+  if(status!=='DELETED'&&restore){sendText(msg.chat.id,'Giao dịch chưa bị xóa.');return true;}
+  var before=JSON.stringify({category:v[5],description:v[6],amount:v[7],status:status});
+  var label='';
+  if(remove){sh.getRange(row,16).setValue('DELETED');label='Đã xóa giao dịch (có thể khôi phục)';}
+  else if(restore){sh.getRange(row,16).setValue('ACTIVE');label='Đã khôi phục giao dịch';}
+  else if(match){
+    var field=match[1],value=action.match(/^sửa\s+(?:danh mục|tiền|số tiền|nội dung)\s+(.+)$/i)[1].trim();
+    if(field==='danh mục'){
+      var cat=FAMILY_CATEGORIES.filter(function(x){return x.toLowerCase()===value.toLowerCase();})[0];
+      if(!cat){sendText(msg.chat.id,'Danh mục không hợp lệ. Chọn: '+FAMILY_CATEGORIES.map(escapeHtml_).join(', '));return true;}
+      sh.getRange(row,6).setValue(cat);label='Đã đổi danh mục thành '+cat;
+    }else if(field==='tiền'||field==='số tiền'){
+      var amount=parseMoneyLocal_(value);
+      if(!amount||amount<=0){sendText(msg.chat.id,'Số tiền không hợp lệ. Ví dụ: <code>sửa tiền 15k</code>');return true;}
+      sh.getRange(row,8).setValue(amount);label='Đã đổi số tiền thành '+formatVnd_(amount);
+    }else{
+      sh.getRange(row,7).setValue(value);label='Đã đổi nội dung';
+    }
+  }
+  sh.getRange(row,18).setValue(new Date());
+  var after=JSON.stringify({category:sh.getRange(row,6).getValue(),description:sh.getRange(row,7).getValue(),amount:sh.getRange(row,8).getValue(),status:sh.getRange(row,16).getValue()});
+  familyAuditSheet_().appendRow([new Date(),String(msg.from.id),String(v[12]),action,before,after]);
+  sendText(msg.chat.id,'✓ '+escapeHtml_(label)+'\n#'+escapeHtml_(String(v[12]).slice(0,8)));
+  return true;
+}
+function familyReport_(period){
+  var data=familySheet_().getDataRange().getValues(),now=new Date(),total=0,income=0,cats={},payers={},count=0;
+  var tz='Asia/Ho_Chi_Minh',today=Utilities.formatDate(now,tz,'yyyy-MM-dd');
+  var todayDate=new Date(today+'T00:00:00+07:00');
+  var weekday=(todayDate.getDay()+6)%7;
+  var weekStart=new Date(todayDate.getTime()-weekday*86400000);
+  for(var i=1;i<data.length;i++){
+    var r=data[i],d=new Date(r[0]);if(isNaN(d.getTime())||String(r[15])==='DELETED')continue;
+    if(period==='day'&&Utilities.formatDate(d,tz,'yyyy-MM-dd')!==today)continue;
+    if(period==='week'&&(d<weekStart||d>=new Date(weekStart.getTime()+7*86400000)))continue;
+    if(period==='month'&&(d.getFullYear()!==now.getFullYear()||d.getMonth()!==now.getMonth()))continue;
+    if(period==='year'&&d.getFullYear()!==now.getFullYear())continue;
+    var amount=Number(r[7])||0;
+    if(r[4]==='ThuNhap'){income+=amount;continue;}
+    if(r[4]!=='ChiTieu')continue;
+    count++;total+=amount;
+    cats[r[5]]=(cats[r[5]]||0)+amount;
+    payers[r[3]]=(payers[r[3]]||0)+amount;
+  }
+  var labels={day:'BÁO CÁO NGÀY',week:'BÁO CÁO TUẦN',month:'BÁO CÁO THÁNG',year:'BÁO CÁO NĂM'};
+  function rank(o){return Object.keys(o).sort(function(a,b){return o[b]-o[a]}).map(function(k){return '• '+escapeHtml_(k)+': '+formatVnd_(o[k]);}).join('\n')||'Chưa có';}
+  return '<b>'+labels[period]+'</b>\nChi tiêu: <b>'+formatVnd_(total)+'</b> ('+count+' giao dịch)\nThu nhập: '+formatVnd_(income)+'\nChênh lệch: '+formatVnd_(income-total)+'\n\n<b>Theo danh mục</b>\n'+rank(cats)+'\n\n<b>Theo người chi</b>\n'+rank(payers);
+}
