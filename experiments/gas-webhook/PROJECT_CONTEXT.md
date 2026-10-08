@@ -62,3 +62,14 @@ Source files on `main`: `Config.gs`, `FamilyConfig.gs`, `FamilyLedger.gs`, `Fami
 - `appendFamilyTransaction_` uses `isDuplicate_` then `appendRow` without atomic lock.
 - `familyResetCallback_` itself acquires ScriptLock; do not wrap the entire new webhook in another ScriptLock or deadlock nested lock acquisition.
 - The old production workflow calls `?bootstrap=1` on every main deployment; avoid main modifications while old polling is running.
+
+## Implementation progress — 2026-10-08 (latest)
+
+- Ported family sources to isolated GAS directory: `Config.gs`, `FamilyConfig.gs`, `FamilyLedger.gs`, `FamilyCommands.gs`, `FamilyRouter.gs`, `TelegramClient.gs`, `DailyReport.gs`.
+- Replaced echo-only `Code.gs` with family router, **disabled by default** via `ENABLE_FAMILY_WEBHOOK`. Before activation only `/ping`, `/start`, `/status` reply in test chat; all expense messages ignored. The old bot remains live.
+- `FamilyLedger.gs` makes duplicate-check+append atomic with `LockService`; `familyResetCallback_` retains its own lock. Do not lock the outer `doPost`.
+- `Cutover.gs` adds `inspectNewBotReadiness()`, `installWebhookDailyReportTrigger()`, `runWebhookDailyReport_()`, `activateNewFamilyWebhook()`, `pauseNewFamilyWebhook()`. Daily trigger checks every 10 minutes during 21:00 VN and only runs while active; **not exact 21:00**.
+- **Not deployed or runtime-tested yet.** GitHub workflow must be manually run, and new GAS Script Properties must be configured: `TEST_BOT_TOKEN`, `GOOGLE_SPREADSHEET_ID` (same existing sheet), `GEMINI_API_KEY`, `FAMILY_GROUP_ID`. Only values already in test GAS may be assumed configured; verify via `inspectNewBotReadiness()`.
+- After deployment, run `inspectNewBotReadiness()` and `installWebhookDailyReportTrigger()` in NEW GAS. Do not activate until old polling has been stopped and new bot is present in family group. Controlled end-to-end testing of expense features is still required.
+- **Important**: Old `main` auto-deploys old GAS and re-creates polling on every push; keep new code on experiment branch. To disable old polling permanently, a separate main workflow change is needed or disable the production deployment workflow before removing old polling trigger. User has authorized disabling old polling after the new bot is ready, but do not do it prematurely.
+- No changes have been made to old production GAS or its Telegram token; shared spreadsheet content has not been changed.
