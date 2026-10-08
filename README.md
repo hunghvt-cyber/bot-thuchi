@@ -54,3 +54,10 @@ V1: Telegram family ledger. V2: Gmail bank alerts + MacroDroid webhook, dedupe n
 ## Ghi chú kỹ thuật về Telegram webhook
 
 Thử nghiệm webhook trực tiếp tới Google Apps Script đã đóng; bot chính tiếp tục dùng polling. Xem [kết quả thử nghiệm và lý do không thử lại](docs/telegram-webhook-experiment-2026-10.md).
+
+## Xóa mềm giao dịch thử nghiệm và tra mã
+
+- Quản trị viên nhóm gửi `/resettests`. Bot hiển thị nút **Xác nhận xóa mềm** / **Hủy**; chỉ người đã yêu cầu được bấm xác nhận, trong 5 phút. Không cần gõ `/resettests XACNHAN` nữa.
+- Bot đánh dấu `DELETED` cho các giao dịch của nhóm đã tồn tại tại thời điểm yêu cầu, ghi `AuditLog`, không xóa hàng trong Sheets. Giao dịch mới phát sinh sau khi yêu cầu không bị ảnh hưởng.
+- Mã giao dịch dạng `#xxxxxxxx` xuất hiện trong tin xác nhận ghi chi tiêu và lệnh `/giaodich`. Dùng `/xoa #mã`, `/khoiphuc #mã`, `/suatien #mã 15k` để thao tác.
+- Bot dùng polling, cần nhận cả Telegram `message` và `callback_query`. Sau khi triển khai phiên bản mới, polling sẽ nhận nút xác nhận ở lượt quét kế tiếp (thường trong 1 phút).
