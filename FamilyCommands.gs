@@ -98,27 +98,62 @@ function familyRememberUserMessage_(msg){
 }
 function familyResetTests_(msg,text){
   if(!familyAdmin_(msg)){sendText(msg.chat.id,'Chỉ quản trị viên nhóm được xóa dữ liệu thử nghiệm.');return;}
-  var props=PropertiesService.getScriptProperties(),key='RESET_TESTS_'+msg.chat.id+'_'+msg.from.id;
   var sh=familySheet_(),rows=sh.getDataRange().getValues(),n=0;
   for(var i=1;i<rows.length;i++)if(String(rows[i][9])===String(msg.chat.id)&&String(rows[i][15])!=='DELETED')n++;
-  if(text.trim()==='/resettests'){
-    props.setProperty(key,JSON.stringify({expires:Date.now()+300000,maxRow:rows.length}));
-    sendText(msg.chat.id,'Có '+n+' giao dịch đang hoạt động trong nhóm. Để xóa mềm các giao dịch cũ, gửi <code>/resettests XACNHAN</code> trong 5 phút. Hành động này KHÔNG xóa tin nhắn Telegram; có thể khôi phục từng giao dịch bằng mã.');
-    return;
-  }
-  var state;try{state=JSON.parse(props.getProperty(key)||'null');}catch(e){}
-  props.deleteProperty(key);
-  if(!state||Date.now()>state.expires){sendText(msg.chat.id,'Yêu cầu xác nhận hết hạn. Gửi /resettests trước.');return;}
-  var changed=0,log=familyAuditSheet_();
-  for(var j=2;j<=Math.min(state.maxRow,sh.getLastRow());j++){
-    var row=sh.getRange(j,1,1,18).getValues()[0];
-    if(String(row[9])!==String(msg.chat.id)||String(row[15])==='DELETED')continue;
-    sh.getRange(j,16).setValue('DELETED');
-    sh.getRange(j,18).setValue(new Date());
-    log.appendRow([new Date(),String(msg.from.id),String(row[12]),'resettests',JSON.stringify({status:row[15]||'ACTIVE'}),JSON.stringify({status:'DELETED'})]);
-    changed++;
-  }
-  sendText(msg.chat.id,'Đã loại '+changed+' giao dịch thử nghiệm khỏi báo cáo. Dữ liệu được giữ để khôi phục khi cần.');
+  if(!n){sendText(msg.chat.id,'Không có giao dịch đang hoạt động để xóa mềm.');return;}
+  var token=Utilities.getUuid().replace(/-/g,'').slice(0,20);
+  var key='RESET_CONFIRM_'+token;
+  PropertiesService.getScriptProperties().setProperty(key,JSON.stringify({
+    chatId:String(msg.chat.id),userId:String(msg.from.id),expires:Date.now()+300000,
+    maxRow:rows.length
+  }));
+  sendText(msg.chat.id,'<b>Xác nhận xóa mềm</b>\\nCó <b>'+n+'</b> giao dịch đang hoạt động trong nhóm.\\nChỉ giao dịch đã tồn tại lúc yêu cầu mới bị xóa. Dữ liệu vẫn lưu trong Sheets và có thể khôi phục.\\n\\nChọn nút bên dưới trong 5 phút.',{
+    reply_markup:{inline_keyboard:[
+      [{text:'Xác nhận xóa mềm',callback_data:'rst:yes:'+token}],
+      [{text:'Hủy',callback_data:'rst:no:'+token}]
+    ]}
+  });
+}
+function familyResetCallback_(callback){
+  var data=String(callback.data||''),match=data.match(/^rst:(yes|no):([a-f0-9]{20})$/);
+  if(!match)return false;
+  var chat=callback.message&&callback.message.chat;
+  var props=PropertiesService.getScriptProperties(),key='RESET_CONFIRM_'+match[2];
+  function ack(message){try{telegramApi_('answerCallbackQuery',{callback_query_id:callback.id,text:message,show_alert:false});}catch(e){Logger.log(e);}}
+  if(!chat){ack('Không tìm thấy nhóm.');return true;}
+  var lock=LockService.getScriptLock();
+  if(!lock.tryLock(5000)){ack('Hệ thống đang bận, thử lại.');return true;}
+  try{
+    var state;try{state=JSON.parse(props.getProperty(key)||'null');}catch(e){}
+    if(!state||Date.now()>state.expires||String(state.chatId)!==String(chat.id)){
+      props.deleteProperty(key);ack('Yêu cầu đã hết hạn. Gửi /resettests lại.');return true;
+    }
+    if(String(state.userId)!==String(callback.from.id)){
+      ack('Chỉ quản trị viên đã yêu cầu mới được xác nhận.');return true;
+    }
+    if(match[1]==='no'){
+      props.deleteProperty(key);ack('Đã hủy.');
+      sendText(chat.id,'Đã hủy xóa mềm giao dịch.');
+      return true;
+    }
+    var sh=familySheet_(),last=Math.min(state.maxRow,sh.getLastRow()),rows=last>1?sh.getRange(2,1,last-1,18).getValues():[];
+    var changed=0,log=familyAuditSheet_();
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i];
+      if(String(r[9])!==String(chat.id)||String(r[15])==='DELETED')continue;
+      sh.getRange(i+2,16).setValue('DELETED');
+      sh.getRange(i+2,18).setValue(new Date());
+      log.appendRow([new Date(),String(callback.from.id),String(r[12]),'resettests',JSON.stringify({status:r[15]||'ACTIVE'}),JSON.stringify({status:'DELETED'})]);
+      changed++;
+    }
+    props.deleteProperty(key);
+    ack('Đã xác nhận.');
+    sendText(chat.id,'Đã xóa mềm <b>'+changed+'</b> giao dịch. Dữ liệu vẫn còn trong Sheets; dùng /giaodich và /khoiphuc #mã để phục hồi.');
+  }catch(err){
+    Logger.log('reset callback: '+(err.stack||err));
+    ack('Có lỗi khi xử lý. Kiểm tra báo cáo trước khi thử lại.');
+  }finally{lock.releaseLock();}
+  return true;
 }
 function familyRememberBotMessage_(chatId,messageId){
   if(!messageId)return;
