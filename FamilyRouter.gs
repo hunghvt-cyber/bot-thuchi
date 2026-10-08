@@ -1,6 +1,10 @@
 function isFamilyGroupAllowed_(chatId){var x=familyGroupId_();return !x||String(x)===String(chatId);}
 function handleFamilyMessage_(msg){
-  var chatId=msg.chat.id,text=String(msg.text||'').trim();if(!isFamilyGroupAllowed_(chatId)||!text)return true;
+  var chatId=msg.chat.id,text=String(msg.text||'').trim();if(!text)return true;
+  if(!isFamilyGroupAllowed_(chatId)){
+    if(text.charAt(0)==='/'||/^\s*(xóa|xoá|khôi phục|sửa\s)/i.test(text))sendText(chatId,'Bot đang khóa với một nhóm Telegram khác. Dùng /whoami trong nhóm đã đăng ký hoặc kiểm tra FAMILY_GROUP_ID trong Apps Script.');
+    return true;
+  }
   var cmd=text.split(/\s+/)[0].split('@')[0].toLowerCase();
   if(cmd==='/start'||cmd==='/help'){
     sendText(chatId,
@@ -44,11 +48,15 @@ function handleFamilyMessage_(msg){
 }
 function doPost(e){
   try{var u=JSON.parse(e.postData.contents);if(u.message)handleFamilyMessage_(u.message);return ContentService.createTextOutput('ok');}
-  catch(err){Logger.log(err.stack||err);return ContentService.createTextOutput('error');}
+  catch(err){Logger.log(err.stack||err);try{var msg=u&&u.message;if(msg&&msg.chat&&msg.chat.id)sendText(msg.chat.id,'Lỗi xử lý: '+escapeHtml_(String(err.message||err).slice(0,180)));}catch(ignore){}return ContentService.createTextOutput('error');}
 }
 
 function doGet(e){
   try{
+    if(e&&e.parameter&&e.parameter.diagnostic==='1'){
+      var info=getWebhookInfo().result||{};
+      return ContentService.createTextOutput(JSON.stringify({ok:true,webhookMatches:info.url===getWebAppUrl(),pending:info.pending_update_count||0,lastError:info.last_error_message||'',groupConfigured:!!familyGroupId_(),commands:registerFamilyCommands_().result.length})).setMimeType(ContentService.MimeType.JSON);
+    }
     if(e&&e.parameter&&e.parameter.bootstrap==='1'){
       var r=setupFamilyBot();
       return ContentService.createTextOutput(JSON.stringify({ok:true,webApp:getWebAppUrl(),telegram:r&&r.ok===true,webhook:r&&r.webhook||''})).setMimeType(ContentService.MimeType.JSON);
