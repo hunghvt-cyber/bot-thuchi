@@ -1,0 +1,26 @@
+name: Diagnose test Web App HTTP
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe GET and POST without Telegram token
+        env:
+          WEB_APP_URL: https://script.google.com/macros/s/AKfycbzjru1Ik0ULvnLyoROcAESctisHoxGy0eI056Mxwt1tUrwiQIBCeKtICARZZskodSJX/exec
+        run: |
+          set -euo pipefail
+          echo '=== GET (no redirect) ==='
+          curl -sS --max-time 25 -o /tmp/get-body -D /tmp/get-headers -w 'GET status=%{http_code} redirect=%{redirect_url}\n' "$WEB_APP_URL" || true
+          head -c 400 /tmp/get-body || true
+          echo
+          echo '=== POST (no redirect, no bot token) ==='
+          curl -sS --max-time 25 -X POST -H 'Content-Type: application/json' --data '{"update_id":0}' -o /tmp/post-body -D /tmp/post-headers -w 'POST status=%{http_code} redirect=%{redirect_url}\n' "$WEB_APP_URL" || true
+          head -c 400 /tmp/post-body || true
+          echo
+          echo '=== POST redirect-followed ==='
+          curl -sS -L --max-time 25 -X POST -H 'Content-Type: application/json' --data '{"update_id":0}' -o /tmp/post-follow-body -w 'POST follow status=%{http_code} redirects=%{num_redirects}\n' "$WEB_APP_URL" || true
+          head -c 400 /tmp/post-follow-body || true
+          echo
