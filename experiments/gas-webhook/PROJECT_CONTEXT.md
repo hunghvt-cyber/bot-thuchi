@@ -73,3 +73,11 @@ Source files on `main`: `Config.gs`, `FamilyConfig.gs`, `FamilyLedger.gs`, `Fami
 - After deployment, run `inspectNewBotReadiness()` and `installWebhookDailyReportTrigger()` in NEW GAS. Do not activate until old polling has been stopped and new bot is present in family group. Controlled end-to-end testing of expense features is still required.
 - **Important**: Old `main` auto-deploys old GAS and re-creates polling on every push; keep new code on experiment branch. To disable old polling permanently, a separate main workflow change is needed or disable the production deployment workflow before removing old polling trigger. User has authorized disabling old polling after the new bot is ready, but do not do it prematurely.
 - No changes have been made to old production GAS or its Telegram token; shared spreadsheet content has not been changed.
+
+## Cutover update — 2026-10-09
+
+- User confirmed NEW bot added to family group and private-chat /ping and /start work.
+- New GAS readiness check confirmed test token, existing spreadsheet access (Transactions, 11 rows at check), Gemini key, group ID, matching webhook URL, zero pending, no last error. User reports daily trigger installation complete (re-check reportTriggers=1 before activation).
+- **Old main workflow changed** in commit `5d5419399fa5b90ebd418859532b61d1660d9952`: no automatic deployment on push, no bootstrap that re-creates polling; manual workflow remains available. This does NOT delete the existing GAS polling trigger.
+- **NEXT USER ACTION:** In OLD production GAS editor (script ID `1sYaIFrLfzoj18ZbcXDwAEjuXBi-Y7iNPLZX2MqeFP2PV8I2SfFfLLFxt`), open Triggers and delete ONLY trigger handler `pollFamilyTelegram_`. Confirm removal. Then in NEW GAS run `inspectNewBotReadiness()` and `activateNewFamilyWebhook()`. Test one controlled expense in family group, verify single new Sheets row, test /today and soft delete. Do not delete existing data.
+- Old daily report was invoked by old polling; after trigger removal, new daily trigger must be present and enabled to maintain 21h report.
