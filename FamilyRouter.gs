@@ -51,13 +51,13 @@ function handleFamilyMessage_(msg){
   if(cmd==='/mine'){sendText(chatId,familySummary_('month',msg.from.id));return true;}
   if(text.charAt(0)==='/')return true;
   try{var tx=parseFamilyTransaction_(text);if(!tx||!Number(tx.amount))return true;var saved=appendFamilyTransaction_(msg,tx);if(saved.duplicate)return true;
-    var sent=sendText(chatId,'✓ <b>'+formatVnd_(tx.amount)+'</b> · '+escapeHtml_(tx.category||'Khác')+' · '+escapeHtml_(saved.payer)+'\n'+escapeHtml_(tx.description||text));
+    var sent=sendText(chatId,'✓ <b>'+formatVnd_(tx.amount)+'</b> · '+escapeHtml_(tx.category||'Khác')+' · '+escapeHtml_(saved.payer)+'\n'+escapeHtml_(tx.description||text)+'\nMã GD: <code>#'+escapeHtml_(String(saved.id).slice(0,8))+'</code>');
     if(sent&&sent.result&&sent.result.message_id){var sh=familySheet_(),data=sh.getRange(2,13,sh.getLastRow()-1,1).getValues();for(var i=data.length-1;i>=0;i--){if(String(data[i][0])===String(saved.id)){sh.getRange(i+2,17).setValue(String(sent.result.message_id));break;}}}
     return true;
   }catch(e){Logger.log(e.stack||e);sendText(chatId,'Không xử lý được. Thử: <code>đi chợ 450k</code>');return true;}
 }
 function doPost(e){
-  try{var u=JSON.parse(e.postData.contents);if(u.message)handleFamilyMessage_(u.message);return ContentService.createTextOutput('ok');}
+  try{var u=JSON.parse(e.postData.contents);if(u.message)handleFamilyMessage_(u.message);if(u.callback_query)familyResetCallback_(u.callback_query);return ContentService.createTextOutput('ok');}
   catch(err){Logger.log(err.stack||err);try{var msg=u&&u.message;if(msg&&msg.chat&&msg.chat.id)sendText(msg.chat.id,'Lỗi xử lý: '+escapeHtml_(String(err.message||err).slice(0,180)));}catch(ignore){}return ContentService.createTextOutput('error');}
 }
 
