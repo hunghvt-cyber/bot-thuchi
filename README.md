@@ -50,3 +50,7 @@ Không commit token/API key. Tất cả secret nằm trong Apps Script Script Pr
 ## Roadmap
 
 V1: Telegram family ledger. V2: Gmail bank alerts + MacroDroid webhook, dedupe nguồn giao dịch, sửa/xóa bằng reply, báo cáo nâng cao.
+
+## Ghi chú kỹ thuật về Telegram webhook
+
+Thử nghiệm webhook trực tiếp tới Google Apps Script đã đóng; bot chính tiếp tục dùng polling. Xem [kết quả thử nghiệm và lý do không thử lại](docs/telegram-webhook-experiment-2026-10.md).
