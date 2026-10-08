@@ -19,3 +19,20 @@ function setWebhook(){
 }
 
 function getWebhookInfo(){ return telegramApi_('getWebhookInfo',{}); }
+
+function registerFamilyCommands_(){
+  var commands=[
+    {command:'help',description:'Hướng dẫn sử dụng'},
+    {command:'baocaongay',description:'Báo cáo chi tiêu hôm nay'},
+    {command:'baocaotuan',description:'Báo cáo chi tiêu tuần'},
+    {command:'baocaothang',description:'Báo cáo chi tiêu tháng'},
+    {command:'baocaonam',description:'Báo cáo chi tiêu năm'},
+    {command:'today',description:'Tổng chi hôm nay'},
+    {command:'month',description:'Tổng chi tháng'},
+    {command:'mine',description:'Chi tiêu của tôi'},
+    {command:'whoami',description:'Xem ID nhóm và người dùng'}
+  ];
+  telegramApi_('setMyCommands',{commands:commands});
+  telegramApi_('setMyCommands',{commands:commands,scope:{type:'all_group_chats'}});
+  return telegramApi_('getMyCommands',{scope:{type:'all_group_chats'}});
+}
