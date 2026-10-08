@@ -1,0 +1,32 @@
+name: Deploy isolated GAS webhook test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: apps-script-webhook-experiment
+  cancel-in-progress: false
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/gas-webhook-isolated
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Restore existing clasp credentials
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          test -n "$CLASPRC_JSON" || { echo "::error::Missing CLASPRC_JSON"; exit 1; }
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+      - name: Push test script only
+        working-directory: experiments/gas-webhook
+        run: npx --yes @google/clasp@3.4.1 push --force
+      - name: Create separate test web app deployment
+        working-directory: experiments/gas-webhook
+        run: npx --yes @google/clasp@3.4.1 deploy --description "Isolated webhook benchmark ${GITHUB_SHA}"
