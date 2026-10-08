@@ -1,41 +1,36 @@
-# Isolated Telegram webhook hardening (TEST ONLY)
+# Poorman Telebot — new webhook GAS (staged)
 
-This branch deploys to a separate Apps Script project and uses only `TEST_BOT_TOKEN` in that project's Script Properties. Never copy production tokens or change the production polling workflow.
+**Read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) first.** This folder is the candidate replacement for the old polling GAS. It uses a different Telegram bot and GAS deployment but the **same existing family Google Sheets**. Old polling is NOT disabled by code deployment.
 
-## Confirmed in manual tests (2026-10-08)
+## Deploy (safe by default)
 
-- Telegram -> Apps Script `doPost` -> Telegram `sendMessage` worked with `HtmlService.createHtmlOutput('OK')` and **string** `chat_id`.
-- `ContentService` previously produced Telegram `302 Found` retry errors.
-- The isolated bot successfully echoed `hello999`, `/start`, `/ping`, `/pong`.
-- The numeric timing inside a reply measures GAS processing up to constructing the reply, **not** end-to-end Telegram latency.
+1. Run [Deploy isolated GAS webhook test](https://github.com/hunghvt-cyber/poorman-telebot/actions/workflows/deploy-gas-webhook-test.yml). It deploys only this folder to the separate GAS project.
+2. In NEW GAS Script Properties, configure:
+   - `TEST_BOT_TOKEN`: new bot token (already present from webhook tests)
+   - `GOOGLE_SPREADSHEET_ID`: **existing** family Sheet ID from old GAS properties
+   - `GEMINI_API_KEY`: Gemini key from old GAS properties
+   - `FAMILY_GROUP_ID`: existing family Telegram group ID
+   - `GEMINI_MODEL`: optional
+   - **Do not set** `ENABLE_FAMILY_WEBHOOK=YES` yet.
+3. Authorize new GAS scopes for Sheets and triggers; run `inspectNewBotReadiness()` to check configuration, and `installWebhookDailyReportTrigger()` once.
+4. In private chat with `@PoormanTest0219_bot`, send `/ping`. Expect `pong`. Expense messages are ignored until activation.
 
-## Changes requiring fresh validation
+## Cutover (manual, requires coordinated steps)
 
-- Commands: `/start` -> help; `/ping` -> `pong`; other text -> echo.
-- Deduplication: `LockService` serializes updates; last 100 **successfully processed** `update_id` values in `TEST_PROCESSED_UPDATE_IDS` Script Property. Does not assume update IDs arrive in order.
-- Diagnostics: `TEST_LAST_DIAGNOSTIC` records `sent`, `ignored`, `duplicate`, `lock_busy`, or `error`. Never stores bot token.
-- `runTestWebhookSelfChecks()` runs offline assertions for command routing.
-- No `getMe` API call for every webhook request.
+1. Add new bot to family group; configure BotFather privacy mode appropriately; verify permissions.
+2. Stop old GAS polling trigger `pollFamilyTelegram_` **and prevent old GitHub main workflow from re-running `setupFamilyBot()`**. Do not delete any spreadsheet or Telegram data.
+3. Run `activateNewFamilyWebhook()` in NEW GAS editor. It refuses activation unless required Script Properties, Sheets access, webhook URL and report trigger are ready.
+4. Send controlled test expenses and commands to new bot in family group; verify one row per expense in existing `Transactions` sheet, edits/deletes and callback confirmation. Check `inspectTestWebhook()` and `showLastWebhookDiagnostic()`.
+5. Verify the daily report runs once around 21:00 Vietnam time. Time-based GAS triggers are not exact-time guarantees.
 
-## Deployment and acceptance checklist
+## Emergency rollback
 
-1. Run the GitHub Actions **Deploy isolated GAS webhook test** workflow (manual dispatch; fixed test deployment).
-2. Run `runTestWebhookSelfChecks()` from the TEST GAS editor; confirm all checks PASS.
-3. If webhook is not registered, run `registerTestWebhook()` from TEST GAS editor. **Warning:** this intentionally drops pending updates.
-4. In a private chat with `@PoormanTest0219_bot`, send `/start`, `/ping`, `hello`, and several distinct messages quickly. Expected: help, `pong`, echo, and one reply per message.
-5. Run `inspectTestWebhook()`. Check `pending_update_count`, `last_error_date` and `last_error_message`; an old last_error may persist, so compare timestamps.
-6. Inspect `TEST_LAST_DIAGNOSTIC` for successful `stage:sent`, `telegram_http:200`. Duplicate handling needs explicit test before declaring verified.
-7. Monitor for 24 hours and confirm no retries, duplicate expense entries or quota issues **before considering production**.
+- Run `pauseNewFamilyWebhook()` in new GAS; then restore exactly one old polling trigger (and only if old deployment is still valid). Avoid two active writers.
+- Do not use `drop_pending_updates:true` on the family production bot.
 
-## Caveats / rollback
+## Caveats
 
-- Telegram treats a successful HTTP response as delivery confirmation. If GAS catches an error but returns HTTP 200, Telegram will **not retry**: the failed update may be lost. This test implementation records the error, but is **not** a durable queue. Production financial writes require idempotency at the expense record level and a reconciliation path.
-- Deduplication of last 100 IDs is a bounded protection, not an infinite exactly-once guarantee. Script Properties is not a full queue. `LockService` is held across the send operation, so bursts may queue and potentially hit lock timeout.
-- For **test bot only**, run `stopTestWebhook()` (if present) or call Telegram `deleteWebhook` with `drop_pending_updates=true` to stop deliveries. Never call deleteWebhook using the production bot token.
-- Do not enable production webhook while its polling trigger is running. Production cutover and rollback must be separately reviewed.
-
-## Files
-
-- `Code.gs`: webhook handling, command router, deduplication and diagnostics
-- `WebhookSetup.gs`: test-only registration, status and direct-send diagnostics
-- `.github/workflows/deploy-gas-webhook-test.yml`: manual isolated deployment
+- New GAS webhook uses `HtmlService` to avoid the earlier Telegram 302.
+- Ledger dedupe is atomic using ScriptLock, but webhook error responses may be acknowledged despite business failure; monitor diagnostics and reconcile errors manually.
+- Full family workflow and shared-sheet write tests **remain pending** until the new GAS is deployed and configured.
+- The GitHub `main` workflow automatically redeploys and reboots the OLD polling bot on push; do not casually merge this branch into main.
