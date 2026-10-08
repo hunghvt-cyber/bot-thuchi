@@ -22,12 +22,13 @@ function pollFamilyTelegram_(){
     props.setProperty('POLL_LAST_START',new Date().toISOString());
     props.deleteProperty('POLL_LAST_ERROR');
     var offset=Number(props.getProperty('TELEGRAM_UPDATE_OFFSET')||0);
-    var updates=telegramApi_('getUpdates',{offset:offset,limit:30,timeout:0,allowed_updates:['message']}).result||[];
+    var updates=telegramApi_('getUpdates',{offset:offset,limit:30,timeout:0,allowed_updates:['message','callback_query']}).result||[];
     props.setProperty('POLL_LAST_BATCH_SIZE',String(updates.length));
     for(var i=0;i<updates.length;i++){
       var update=updates[i];
       try{
         if(update.message)handleFamilyMessage_(update.message);
+        if(update.callback_query)familyResetCallback_(update.callback_query);
       }catch(err){
         props.setProperty('POLL_LAST_ERROR',String(err.message||err).slice(0,250));
         Logger.log('Telegram update '+update.update_id+': '+(err.stack||err));
