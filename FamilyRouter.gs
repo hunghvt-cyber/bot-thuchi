@@ -2,7 +2,33 @@ function isFamilyGroupAllowed_(chatId){var x=familyGroupId_();return !x||String(
 function handleFamilyMessage_(msg){
   var chatId=msg.chat.id,text=String(msg.text||'').trim();if(!isFamilyGroupAllowed_(chatId)||!text)return true;
   var cmd=text.split(/\s+/)[0].split('@')[0].toLowerCase();
-  if(cmd==='/start'||cmd==='/help'){sendText(chatId,'<b>Poorman Family Expense Bot</b>\nNhắn: <code>cafe 35k</code>, <code>đi chợ 630</code>, <code>học phí 2tr5</code>.\nLệnh: /today /month /mine /baocaongay /baocaotuan /baocaothang /baocaonam /whoami. Reply tin xác nhận để sửa/xóa/khôi phục');return true;}
+  if(cmd==='/start'||cmd==='/help'){
+    sendText(chatId,
+      '<b>HƯỚNG DẪN BOT CHI TIÊU GIA ĐÌNH</b>\n\n'+
+      '<b>1. Ghi giao dịch</b>\n'+
+      '• <code>mì tôm 10k</code>\n'+
+      '• <code>đi chợ 630</code> (630.000đ)\n'+
+      '• <code>học phí 2tr5</code> (2.500.000đ)\n\n'+
+      '<b>2. Báo cáo</b>\n'+
+      '• /baocaongay — hôm nay\n'+
+      '• /baocaotuan — tuần này\n'+
+      '• /baocaothang — tháng này\n'+
+      '• /baocaonam — năm nay\n'+
+      '• /mine — chi tiêu của tôi trong tháng\n\n'+
+      '<b>3. Sửa hoặc xóa</b>\n'+
+      'Nhấn Reply vào tin nhắn xác nhận của bot (hoặc tin nhắn chi tiêu gốc), rồi gửi:\n'+
+      '• <code>sửa danh mục Ăn uống</code>\n'+
+      '• <code>sửa tiền 15k</code>\n'+
+      '• <code>sửa nội dung Mì tôm Hảo Hảo</code>\n'+
+      '• <code>xóa</code> — xóa mềm, không mất dữ liệu\n'+
+      '• <code>khôi phục</code> — khôi phục giao dịch đã xóa\n\n'+
+      '<b>4. Lưu ý</b>\n'+
+      '• Chỉ người tạo giao dịch được sửa, xóa hoặc khôi phục.\n'+
+      '• Giao dịch đã xóa không tính vào báo cáo.\n'+
+      '• Có thể Reply lại tin nhắn xác nhận cũ để khôi phục.\n'+
+      '• /whoami — xem ID người dùng và nhóm.\n'+
+      '• /help — xem hướng dẫn này.'
+    );return true;}
   if(cmd==='/whoami'){if(!familyGroupId_()&&(msg.chat.type==='group'||msg.chat.type==='supergroup'))setFamilyGroupId_(chatId);sendText(chatId,'User ID: <code>'+msg.from.id+'</code>\nGroup ID: <code>'+chatId+'</code>\nFamily group: <b>'+((String(familyGroupId_())===String(chatId))?'BOUND':'NOT BOUND')+'</b>');return true;}
   if(cmd==='/baocaongay'||cmd==='/baocaotuan'||cmd==='/baocaothang'||cmd==='/baocaonam'){var p={'/baocaongay':'day','/baocaotuan':'week','/baocaothang':'month','/baocaonam':'year'};sendText(chatId,familyReport_(p[cmd]));return true;}
   if(msg.reply_to_message&&familyEditReply_(msg,text))return true;
