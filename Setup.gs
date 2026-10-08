@@ -2,15 +2,35 @@ function setupFamilyBot(){
   familySheet_();
   if(!getBotToken())throw new Error('Thiếu BOT_TOKEN');
   if(!getGeminiApiKey())throw new Error('Thiếu GEMINI_API_KEY');
-  if(!getWebAppUrl())throw new Error('Thiếu WEB_APP_URL');
-  var result=setWebhook();
+  // Apps Script ContentService responds with HTTP 302, which Telegram webhook rejects.
+  // Poll Telegram directly from a time-based Apps Script trigger instead.
+  var removed=telegramApi_('deleteWebhook',{drop_pending_updates:false});
   var commands=registerFamilyCommands_();
   if(!commands.result||!commands.result.length)throw new Error('Telegram commands not registered');
-  var info=getWebhookInfo();
-  var actual=info&&info.result&&info.result.url||'';
-  if(actual!==getWebAppUrl())throw new Error('Webhook URL mismatch: '+actual);
-  var out={ok:true,setWebhook:result.ok===true,webhook:actual};
-  Logger.log(JSON.stringify(out));return out;
+  var triggers=ScriptApp.getProjectTriggers().filter(function(t){return t.getHandlerFunction()==='pollFamilyTelegram_';});
+  if(!triggers.length)ScriptApp.newTrigger('pollFamilyTelegram_').timeBased().everyMinutes(1).create();
+  if(triggers.length>1)triggers.slice(1).forEach(function(t){ScriptApp.deleteTrigger(t);});
+  var info=getWebhookInfo().result||{};
+  if(info.url)throw new Error('Webhook still active; cannot poll');
+  return {ok:true,mode:'polling',pollIntervalMinutes:1,telegram:removed.ok===true,commands:commands.result.length,pending:info.pending_update_count||0};
+}
+function pollFamilyTelegram_(){
+  var lock=LockService.getScriptLock();
+  if(!lock.tryLock(1000))return;
+  try{
+    var props=PropertiesService.getScriptProperties(),offset=Number(props.getProperty('TELEGRAM_UPDATE_OFFSET')||0);
+    var updates=telegramApi_('getUpdates',{offset:offset,limit:30,timeout:0,allowed_updates:['message']}).result||[];
+    for(var i=0;i<updates.length;i++){
+      var update=updates[i];
+      try{
+        if(update.message)handleFamilyMessage_(update.message);
+      }catch(err){
+        Logger.log('Telegram update '+update.update_id+': '+(err.stack||err));
+        try{if(update.message&&update.message.chat)sendText(update.message.chat.id,'Lỗi xử lý: '+escapeHtml_(String(err.message||err).slice(0,180)));}catch(ignore){}
+      }
+      props.setProperty('TELEGRAM_UPDATE_OFFSET',String(update.update_id+1));
+    }
+  }finally{lock.releaseLock();}
 }
 function healthCheck(){return {spreadsheet:!!getMainSpreadsheetId(),bot:!!getBotToken(),gemini:!!getGeminiApiKey(),webApp:!!getWebAppUrl(),group:familyGroupId_()||'ANY'};}
 function testMoneyParser(){
