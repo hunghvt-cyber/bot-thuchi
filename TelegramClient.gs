@@ -10,7 +10,9 @@ function telegramApi_(method,payload){
 function sendText(chatId,text,extra){
   var p={chat_id:String(chatId),text:String(text),parse_mode:'HTML'};
   if(extra) Object.keys(extra).forEach(function(k){p[k]=extra[k];});
-  return telegramApi_('sendMessage',p);
+  var result=telegramApi_('sendMessage',p);
+  try{if(result.result&&result.result.message_id)familyRememberBotMessage_(chatId,result.result.message_id);}catch(e){Logger.log('Message tracking: '+e);}
+  return result;
 }
 function setWebhook(){
   var url=getWebAppUrl();
@@ -23,6 +25,11 @@ function getWebhookInfo(){ return telegramApi_('getWebhookInfo',{}); }
 function registerFamilyCommands_(){
   var commands=[
     {command:'help',description:'Hướng dẫn sử dụng'},
+    {command:'giaodich',description:'Xem giao dịch và mã để sửa hoặc xóa'},
+    {command:'clear',description:'Dọn tin nhắn bot trong nhóm'},
+    {command:'xoa',description:'Xóa giao dịch theo mã'},
+    {command:'khoiphuc',description:'Khôi phục giao dịch theo mã'},
+    {command:'resettests',description:'Xóa mềm các giao dịch thử nghiệm'},
     {command:'baocaongay',description:'Báo cáo chi tiêu hôm nay'},
     {command:'baocaotuan',description:'Báo cáo chi tiêu tuần'},
     {command:'baocaothang',description:'Báo cáo chi tiêu tháng'},
