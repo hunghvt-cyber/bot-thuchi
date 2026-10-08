@@ -107,7 +107,7 @@ function familyResetTests_(msg,text){
     chatId:String(msg.chat.id),userId:String(msg.from.id),expires:Date.now()+300000,
     maxRow:rows.length
   }));
-  sendText(msg.chat.id,'<b>Xác nhận xóa mềm</b>\\nCó <b>'+n+'</b> giao dịch đang hoạt động trong nhóm.\\nChỉ giao dịch đã tồn tại lúc yêu cầu mới bị xóa. Dữ liệu vẫn lưu trong Sheets và có thể khôi phục.\\n\\nChọn nút bên dưới trong 5 phút.',{
+  sendText(msg.chat.id,'<b>Xác nhận xóa mềm</b>\nCó <b>'+n+'</b> giao dịch đang hoạt động trong nhóm.\nChỉ giao dịch đã tồn tại lúc yêu cầu mới bị xóa. Dữ liệu vẫn lưu trong Sheets và có thể khôi phục.\n\nChọn nút bên dưới trong 5 phút.',{
     reply_markup:{inline_keyboard:[
       [{text:'Xác nhận xóa mềm',callback_data:'rst:yes:'+token}],
       [{text:'Hủy',callback_data:'rst:no:'+token}]
