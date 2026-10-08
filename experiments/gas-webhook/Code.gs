@@ -1,4 +1,4 @@
-function doGet(e) { return ContentService.createTextOutput('webhook-test-ready'); }
+function doGet(e) { return HtmlService.createHtmlOutput('webhook-test-ready'); }
 function doPost(e) {
   var start=Date.now();
   var diagnostic={at:new Date().toISOString(),stage:'start'};
@@ -38,7 +38,7 @@ function doPost(e) {
     PropertiesService.getScriptProperties().setProperty('TEST_LAST_DIAGNOSTIC',JSON.stringify(diagnostic));
     console.log(JSON.stringify(diagnostic));
   }
-  return ContentService.createTextOutput('OK');
+  return HtmlService.createHtmlOutput('OK');
 }
 function showLastWebhookDiagnostic() {
   var value=PropertiesService.getScriptProperties().getProperty('TEST_LAST_DIAGNOSTIC');
