@@ -89,10 +89,12 @@ function sendFamilyDailyReportIfDue_(){
     if(day===date)totalToday+=amount;
   }
   var days=Number(date.slice(8,10));
-  var message='<b>BÁO CÁO CHI TIÊU — '+date.slice(8,10)+'/'+date.slice(5,7)+'/'+date.slice(0,4)+'</b>'+ 
-    '\\nChi tiêu hôm nay: <b>'+formatVnd_(totalToday)+'</b>'+ 
-    '\\nTrung bình/ngày trong tháng: <b>'+formatVnd_(totalMonth/days)+'</b>'+ 
-    '\\nTổng chi tiêu tháng: <b>'+formatVnd_(totalMonth)+'</b>';
+  var message=[
+    '<b>BÁO CÁO CHI TIÊU — '+date.slice(8,10)+'/'+date.slice(5,7)+'/'+date.slice(0,4)+'</b>',
+    'Chi tiêu hôm nay: <b>'+formatVnd_(totalToday)+'</b>',
+    'Trung bình/ngày trong tháng: <b>'+formatVnd_(totalMonth/days)+'</b>',
+    'Tổng chi tiêu tháng: <b>'+formatVnd_(totalMonth)+'</b>'
+  ].join('\n');
   sendText(chatId,message);
   props.setProperty('DAILY_REPORT_SENT_DATE',date);
   props.deleteProperty('DAILY_REPORT_LAST_ERROR');
