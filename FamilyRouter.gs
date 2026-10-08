@@ -64,7 +64,7 @@ function doGet(e){
   try{
     if(e&&e.parameter&&e.parameter.diagnostic==='1'){
       var info=getWebhookInfo().result||{};
-      return ContentService.createTextOutput(JSON.stringify({ok:true,mode:info.url?'webhook':'polling',pending:info.pending_update_count||0,lastError:info.last_error_message||'',groupConfigured:!!familyGroupId_(),pollTriggers:ScriptApp.getProjectTriggers().filter(function(t){return t.getHandlerFunction()==='pollFamilyTelegram_';}).length,commands:registerFamilyCommands_().result.length})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({ok:true,mode:info.url?'webhook':'polling',pending:info.pending_update_count||0,lastError:info.last_error_message||'',groupConfigured:!!familyGroupId_(),pollTriggers:ScriptApp.getProjectTriggers().filter(function(t){return t.getHandlerFunction()==='pollFamilyTelegram_';}).length,commands:registerFamilyCommands_().result.length,lastPollStart:PropertiesService.getScriptProperties().getProperty('POLL_LAST_START')||'',lastPollSuccess:PropertiesService.getScriptProperties().getProperty('POLL_LAST_SUCCESS')||'',lastPollError:PropertiesService.getScriptProperties().getProperty('POLL_LAST_ERROR')||'',lastBatchSize:PropertiesService.getScriptProperties().getProperty('POLL_LAST_BATCH_SIZE')||''})).setMimeType(ContentService.MimeType.JSON);
     }
     if(e&&e.parameter&&e.parameter.bootstrap==='1'){
       var r=setupFamilyBot();
