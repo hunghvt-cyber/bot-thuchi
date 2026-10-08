@@ -19,7 +19,7 @@ function doPost(e) {
     }
     if(msg && msg.text && token) {
       var r=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/sendMessage',{
-        method:'post',payload:{chat_id:msg.chat.id,text:'Webhook OK ('+(Date.now()-start)+'ms): '+msg.text},
+        method:'post',payload:{chat_id:String(msg.chat.id),text:'Webhook OK ('+(Date.now()-start)+'ms): '+msg.text},
         muteHttpExceptions:true
       });
       diagnostic.telegram_http=r.getResponseCode();
