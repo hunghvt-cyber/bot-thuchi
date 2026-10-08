@@ -1,4 +1,4 @@
-var TEST_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzjru1Ik0ULvnLyoROcAESctisHoxGy0eI056Mxwt1tUrwiQIBCeKtICARZZskodSJX/exec';
+var TEST_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyz9lklOUobi-ghu4ZmRhFXJuI5GiHKfaCTb5Ss88GMigeMqxkhvixyKY4HtPcA-C-d/exec';
 function testApi_(method, payload) {
   var token = PropertiesService.getScriptProperties().getProperty('TEST_BOT_TOKEN');
   if (!token) throw new Error('Missing TEST_BOT_TOKEN');
