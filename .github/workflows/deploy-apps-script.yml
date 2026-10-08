@@ -1,7 +1,7 @@
 name: Deploy Apps Script
 on:
-  push:
-    branches: [main]
+  # Legacy polling GAS is frozen during webhook migration.
+  # Do not auto-deploy or re-create polling on main pushes.
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,14 +35,4 @@ jobs:
         run: npx --yes @google/clasp@3.4.1 push --force
       - name: Redeploy Web App
         run: npx --yes @google/clasp@3.4.1 update-deployment "AKfycbyaTgOIeeNkUEUoqsQcEaI_LPSFh8V4Rf28gxXppiTWCpxM8Eirm-wsQH_JMV9kmXyh" --description "GitHub ${GITHUB_SHA}"
-      - name: Ensure Telegram webhook
-        run: |
-          RESPONSE="$(curl --fail --silent --show-error --location --connect-timeout 10 --max-time 45 "https://script.google.com/macros/s/AKfycbyaTgOIeeNkUEUoqsQcEaI_LPSFh8V4Rf28gxXppiTWCpxM8Eirm-wsQH_JMV9kmXyh/exec?bootstrap=1")"
-          echo "$RESPONSE"
-          echo "$RESPONSE" | grep -q '"ok":true'
-# CI/CD source of truth: GitHub main -> Apps Script
-
-      - name: Diagnose Telegram delivery
-        run: |
-          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 45 'https://script.google.com/macros/s/AKfycbyaTgOIeeNkUEUoqsQcEaI_LPSFh8V4Rf28gxXppiTWCpxM8Eirm-wsQH_JMV9kmXyh/exec?diagnostic=1'
-          echo
+      # Legacy bootstrap deliberately disabled: it re-creates the polling trigger.
