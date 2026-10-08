@@ -5,6 +5,7 @@ function handleFamilyMessage_(msg){
     if(text.charAt(0)==='/'||/^\s*(xóa|xoá|khôi phục|sửa\s)/i.test(text))sendText(chatId,'Bot đang khóa với một nhóm Telegram khác. Dùng /whoami trong nhóm đã đăng ký hoặc kiểm tra FAMILY_GROUP_ID trong Apps Script.');
     return true;
   }
+  try{familyRememberUserMessage_(msg);}catch(trackError){Logger.log('User message tracking: '+trackError);}
   var cmd=text.split(/\s+/)[0].split('@')[0].toLowerCase();
   if(cmd==='/start'||cmd==='/help'){
     sendText(chatId,
@@ -29,7 +30,7 @@ function handleFamilyMessage_(msg){
       '• <code>khôi phục</code> — khôi phục giao dịch đã xóa\n'+
       'Không cần Reply: <code>/xoa #mã</code>, <code>/khoiphuc #mã</code>, <code>/suatien #mã 15k</code>, <code>/suadanhmuc #mã Ăn uống</code>, <code>/suanoidung #mã nội dung mới</code>. Lấy mã bằng /giaodich.\n\n'+
       '<b>4. Dọn dẹp</b>\n'+
-      '• /clear — quản trị viên xóa tin nhắn bot còn xóa được (thường trong 48 giờ), không xóa giao dịch.\n'+
+      '• /clear — quản trị viên xóa tin nhắn bot và thành viên mà bot đã ghi nhận (thường trong 48 giờ), không xóa giao dịch.\n'+
       '• /resettests — quản trị viên xóa mềm toàn bộ giao dịch cũ sau xác nhận.\n\n'+
       '<b>5. Lưu ý</b>\n'+
       '• Chỉ người tạo giao dịch được sửa, xóa hoặc khôi phục.\n'+
