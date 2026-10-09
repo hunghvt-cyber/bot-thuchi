@@ -43,3 +43,11 @@ function registerFamilyCommands_(){
   telegramApi_('setMyCommands',{commands:commands,scope:{type:'all_group_chats'}});
   return telegramApi_('getMyCommands',{scope:{type:'all_group_chats'}});
 }
+
+/** One-time cleanup: remove OLD bot slash commands from default and group scopes. */
+function clearLegacyBotCommands(){
+  var scopes=[{type:'default'},{type:'all_group_chats'},{type:'all_private_chats'}];
+  scopes.forEach(function(scope){telegramApi_('deleteMyCommands',{scope:scope});});
+  scopes.forEach(function(scope){var result=telegramApi_('getMyCommands',{scope:scope});if(result.result&&result.result.length)throw new Error('Legacy commands remain in '+scope.type);});
+  console.log('Old Telegram bot commands cleared; new bot untouched.');
+}
