@@ -52,3 +52,8 @@ function runTestWebhookSelfChecks(){
   console.log('ENABLE_FAMILY_WEBHOOK: '+(props.getProperty('ENABLE_FAMILY_WEBHOOK')||'NO'));
   console.log('New GAS webhook source loaded');
 }
+
+function showLastTransactionDiagnostic(){
+  var v=PropertiesService.getScriptProperties().getProperty('FAMILY_LAST_TRANSACTION_DIAGNOSTIC');
+  console.log(v||'No transaction diagnostic');return v;
+}
