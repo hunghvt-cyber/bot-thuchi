@@ -30,8 +30,6 @@ function registerFamilyCommands_(){
     {command:'baocaotuan',description:'Báo cáo chi tiêu tuần'},
     {command:'baocaothang',description:'Báo cáo chi tiêu tháng'},
     {command:'baocaonam',description:'Báo cáo chi tiêu năm'},
-    {command:'today',description:'Tổng chi hôm nay'},
-    {command:'month',description:'Tổng chi tháng'},
     {command:'mine',description:'Chi tiêu của tôi'},
     {command:'whoami',description:'Xem ID nhóm và người dùng'}
   ];
