@@ -13,6 +13,9 @@ function doPost(e){
     var props=PropertiesService.getScriptProperties();
     var active=props.getProperty('ENABLE_FAMILY_WEBHOOK')==='YES';
     diag.active=active;
+    diag.message_id=msg&&msg.message_id;
+    diag.from_id=msg&&msg.from&&msg.from.id;
+    diag.message_kind=msg?(typeof msg.text==='string'?'text':'non_text'):cb?'callback':'other';
     if(!active){
       if(msg&&msg.chat&&typeof msg.text==='string'){
         var command=String(msg.text).trim().split(/\s+/)[0].split('@')[0].toLowerCase();
@@ -38,6 +41,7 @@ function doPost(e){
     diag.elapsed_ms=Date.now()-started;
     PropertiesService.getScriptProperties().setProperty('TEST_LAST_DIAGNOSTIC',JSON.stringify(diag));
     console.log(JSON.stringify(diag));
+    try{writeWebhookHistory_(diag);}catch(logError){console.error('History error: '+logError);}
   }
   return HtmlService.createHtmlOutput('OK');
 }
@@ -56,4 +60,17 @@ function runTestWebhookSelfChecks(){
 function showLastTransactionDiagnostic(){
   var v=PropertiesService.getScriptProperties().getProperty('FAMILY_LAST_TRANSACTION_DIAGNOSTIC');
   console.log(v||'No transaction diagnostic');return v;
+}
+
+function writeWebhookHistory_(d){
+ var ss=SpreadsheetApp.openById(getMainSpreadsheetId());
+ var sh=ss.getSheetByName('WebhookLogs');
+ if(!sh){sh=ss.insertSheet('WebhookLogs');sh.appendRow(['Time','Stage','Update','Chat','Message','Sender','Kind','Active','Error']);}
+ sh.appendRow([d.at,d.stage,d.update_id||'',d.chat_id||'',d.message_id||'',d.from_id||'',d.message_kind||'',d.active===true?'YES':'NO',d.error||'']);
+}
+function showRecentWebhookLogs(){
+ var sh=SpreadsheetApp.openById(getMainSpreadsheetId()).getSheetByName('WebhookLogs');
+ if(!sh){console.log('No history');return;}
+ var n=sh.getLastRow();if(n<2)return;
+ sh.getRange(Math.max(2,n-19),1,Math.min(20,n-1),9).getDisplayValues().forEach(function(row){console.log(JSON.stringify(row));});
 }
