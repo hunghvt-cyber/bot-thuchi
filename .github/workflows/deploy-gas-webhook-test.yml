@@ -1,5 +1,10 @@
 name: Deploy isolated GAS webhook test
 on:
+  push:
+    branches:
+      - experiment/gas-webhook-isolated
+    paths:
+      - 'experiments/gas-webhook/**'
   workflow_dispatch:
 permissions:
   contents: read
