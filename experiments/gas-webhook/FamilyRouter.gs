@@ -1,6 +1,8 @@
 function isFamilyGroupAllowed_(chatId){var x=familyGroupId_();return !x||String(x)===String(chatId);}
 function handleFamilyMessage_(msg){
-  var chatId=msg.chat.id,text=String(msg.text||'').trim();if(!text)return true;
+  var chatId=msg.chat.id,text=String(msg.text||'').trim();
+  var diagnostic=function(stage,detail){try{PropertiesService.getScriptProperties().setProperty('FAMILY_LAST_TRANSACTION_DIAGNOSTIC',JSON.stringify({at:new Date().toISOString(),stage:stage,chat_id:String(chatId),message_id:msg.message_id,from_id:msg.from&&msg.from.id,detail:detail||''}));}catch(ignore){}};
+  if(!text){diagnostic('no_text');return true;}
   if(!isFamilyGroupAllowed_(chatId)){
     if(text.charAt(0)==='/'||/^\s*(xóa|xoá|khôi phục|sửa\s)/i.test(text))sendText(chatId,'Bot đang khóa với một nhóm Telegram khác. Dùng /whoami trong nhóm đã đăng ký hoặc kiểm tra FAMILY_GROUP_ID trong Apps Script.');
     return true;
@@ -50,9 +52,9 @@ function handleFamilyMessage_(msg){
   if(cmd==='/month'){sendText(chatId,familySummary_('month'));return true;}
   if(cmd==='/mine'){sendText(chatId,familySummary_('month',msg.from.id));return true;}
   if(text.charAt(0)==='/')return true;
-  try{var tx=parseFamilyTransaction_(text);if(!tx||!Number(tx.amount))return true;var saved=appendFamilyTransaction_(msg,tx);if(saved.duplicate)return true;
+  try{var tx=parseFamilyTransaction_(text);if(!tx||!Number(tx.amount)){diagnostic('parse_skipped');return true;}var saved=appendFamilyTransaction_(msg,tx);if(saved.duplicate){diagnostic('duplicate');return true;}diagnostic('saved',String(saved.id));
     var sent=sendText(chatId,'✓ <b>'+formatVnd_(tx.amount)+'</b> · '+escapeHtml_(tx.category||'Khác')+' · '+escapeHtml_(saved.payer)+'\n'+escapeHtml_(tx.description||text)+'\nMã GD: <code>#'+escapeHtml_(String(saved.id).slice(0,8))+'</code>');
     if(sent&&sent.result&&sent.result.message_id){var sh=familySheet_(),data=sh.getRange(2,13,sh.getLastRow()-1,1).getValues();for(var i=data.length-1;i>=0;i--){if(String(data[i][0])===String(saved.id)){sh.getRange(i+2,17).setValue(String(sent.result.message_id));break;}}}
     return true;
-  }catch(e){Logger.log(e.stack||e);sendText(chatId,'Không xử lý được. Thử: <code>đi chợ 450k</code>');return true;}
+  }catch(e){diagnostic('error',String(e).slice(0,300));Logger.log(e.stack||e);sendText(chatId,'Không xử lý được. Thử: <code>đi chợ 450k</code>');return true;}
 }
