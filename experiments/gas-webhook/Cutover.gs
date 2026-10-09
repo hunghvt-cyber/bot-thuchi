@@ -50,3 +50,9 @@ function pauseNewFamilyWebhook(){
   PropertiesService.getScriptProperties().setProperty('ENABLE_FAMILY_WEBHOOK','NO');
   console.log('NEW expense processing paused; /ping remains available.');
 }
+
+function registerNewBotCommands(){
+  var result=registerFamilyCommands_();
+  console.log(JSON.stringify(result));
+  return result;
+}
