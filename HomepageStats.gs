@@ -10,17 +10,31 @@ function homepageStats_(envelope) {
     if(diff)return result({ok:false});
     var request=JSON.parse(envelope.payload);
     if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(request.month) || typeof request.timestamp!=='number' || Math.abs(Date.now()-request.timestamp)>60000)return result({ok:false});
-    var group=familyGroupId_();if(!group)return result({ok:false});
     // Reporting must never create a sheet or initialize ledger headers.
-    var sheet=familySpreadsheet_().getSheetByName('Transactions');
+    var spreadsheet=familySpreadsheet_(),sheet=spreadsheet.getSheetByName('Transactions');
     if(!sheet)return result({ok:false});
     var data=sheet.getDataRange().getValues(),transactions=[];
     for(var i=1;i<data.length;i++) {
-      var r=data[i],d=new Date(r[0]),amount=Number(r[7]);
-      if(isNaN(d.getTime()) || String(r[15])==='DELETED' || String(r[9])!==String(group) || !isFinite(amount) || amount<0 || ['ChiTieu','ThuNhap'].indexOf(r[4])<0)continue;
-      var day=Utilities.formatDate(d,'Asia/Ho_Chi_Minh','yyyy-MM-dd');if(day.slice(0,7)!==request.month)continue;
+      var r=data[i],day=homepageLedgerDay_(r[1],spreadsheet.getSpreadsheetTimeZone()),amount=Number(r[7]);
+      if(!day || String(r[15])==='DELETED' || !isFinite(amount) || amount<0 || ['ChiTieu','ThuNhap'].indexOf(r[4])<0)continue;
+      if(day.slice(0,7)!==request.month)continue;
       transactions.push({day:day,amount:amount,type:String(r[4]),category:String(r[5]||'Khác'),payerId:String(r[2]),payer:String(r[3])});
     }
     return result({ok:true,month:request.month,measuredAt:new Date().toISOString(),transactions:transactions});
   }catch(e){return result({ok:false});}
+}
+
+// Date is the ledger's calendar date, not the time the bot received the message.
+function homepageLedgerDay_(value,timeZone) {
+  var day;
+  if(Object.prototype.toString.call(value)==='[object Date]') {
+    if(isNaN(value.getTime()))return '';
+    day=Utilities.formatDate(value,timeZone,'yyyy-MM-dd');
+  }else {
+    var text=String(value==null?'':value).trim(),m=text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    day=m?m[3]+'-'+m[2]+'-'+m[1]:text;
+  }
+  if(!/^20\d{2}-\d{2}-\d{2}$/.test(day))return '';
+  var d=new Date(day+'T00:00:00Z');
+  return !isNaN(d.getTime())&&d.toISOString().slice(0,10)===day?day:'';
 }

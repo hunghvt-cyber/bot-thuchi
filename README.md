@@ -64,7 +64,7 @@ Thử nghiệm webhook trực tiếp tới Google Apps Script đã đóng; bot c
 
 ## Báo cáo trên Homepage
 
-API `homepage_stats` đọc Google Sheets theo tháng và nhóm gia đình đã cấu hình; loại giao dịch `DELETED`. Chỉ trả ngày, số tiền, loại giao dịch, danh mục và người chi. Không ghi Sheets, không tạo sheet, không gửi Telegram và không thay đổi trigger.
+API `homepage_stats` đọc toàn bộ giao dịch trong Google Sheets theo tháng, bao gồm nhóm Telegram cũ và mới; loại giao dịch `DELETED`. Ngày và tháng lấy từ cột `Date` (ngày lịch theo múi giờ của spreadsheet với ô ngày native, hoặc chuỗi dd/MM/yyyy / yyyy-MM-dd), không lấy từ `Timestamp`. Ngày trống hoặc không hợp lệ bị loại; không tự suy đoán từ timestamp. Chỉ trả ngày, số tiền, loại giao dịch, danh mục và người chi. Không ghi Sheets, không tạo sheet, không gửi Telegram và không thay đổi trigger.
 
 - Apps Script Script Properties: `HOMEPAGE_STATS_SECRET`, khóa ngẫu nhiên riêng ít nhất 32 ký tự.
 - Homepage Vercel Production: `EXPENSES_API_SECRET` giống khóa trên; `EXPENSES_API_URL` là URL `/exec` của deployment chính.
