@@ -57,7 +57,7 @@ function handleFamilyMessage_(msg){
   }catch(e){Logger.log(e.stack||e);sendText(chatId,'Không xử lý được. Thử: <code>đi chợ 450k</code>');return true;}
 }
 function doPost(e){
-  try{var u=JSON.parse(e.postData.contents);if(u.message)handleFamilyMessage_(u.message);if(u.callback_query)familyResetCallback_(u.callback_query);return ContentService.createTextOutput('ok');}
+  try{var u=JSON.parse(e.postData.contents);if(u.action==='homepage_stats')return homepageStats_(u);if(u.message)handleFamilyMessage_(u.message);if(u.callback_query)familyResetCallback_(u.callback_query);return ContentService.createTextOutput('ok');}
   catch(err){Logger.log(err.stack||err);try{var msg=u&&u.message;if(msg&&msg.chat&&msg.chat.id)sendText(msg.chat.id,'Lỗi xử lý: '+escapeHtml_(String(err.message||err).slice(0,180)));}catch(ignore){}return ContentService.createTextOutput('error');}
 }
 
