@@ -11,7 +11,10 @@ function homepageStats_(envelope) {
     var request=JSON.parse(envelope.payload);
     if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(request.month) || typeof request.timestamp!=='number' || Math.abs(Date.now()-request.timestamp)>60000)return result({ok:false});
     var group=familyGroupId_();if(!group)return result({ok:false});
-    var data=familySheet_().getDataRange().getValues(),transactions=[];
+    // Reporting must never create a sheet or initialize ledger headers.
+    var sheet=familySpreadsheet_().getSheetByName('Transactions');
+    if(!sheet)return result({ok:false});
+    var data=sheet.getDataRange().getValues(),transactions=[];
     for(var i=1;i<data.length;i++) {
       var r=data[i],d=new Date(r[0]),amount=Number(r[7]);
       if(isNaN(d.getTime()) || String(r[15])==='DELETED' || String(r[9])!==String(group) || !isFinite(amount) || amount<0 || ['ChiTieu','ThuNhap'].indexOf(r[4])<0)continue;

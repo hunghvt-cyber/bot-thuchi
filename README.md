@@ -61,3 +61,15 @@ Thử nghiệm webhook trực tiếp tới Google Apps Script đã đóng; bot c
 - Bot đánh dấu `DELETED` cho các giao dịch của nhóm đã tồn tại tại thời điểm yêu cầu, ghi `AuditLog`, không xóa hàng trong Sheets. Giao dịch mới phát sinh sau khi yêu cầu không bị ảnh hưởng.
 - Mã giao dịch dạng `#xxxxxxxx` xuất hiện trong tin xác nhận ghi chi tiêu và lệnh `/giaodich`. Dùng `/xoa #mã`, `/khoiphuc #mã`, `/suatien #mã 15k` để thao tác.
 - Bot dùng polling, cần nhận cả Telegram `message` và `callback_query`. Sau khi triển khai phiên bản mới, polling sẽ nhận nút xác nhận ở lượt quét kế tiếp (thường trong 1 phút).
+
+## Báo cáo trên Homepage
+
+API `homepage_stats` đọc Google Sheets theo tháng và nhóm gia đình đã cấu hình; loại giao dịch `DELETED`. Chỉ trả ngày, số tiền, loại giao dịch, danh mục và người chi. Không ghi Sheets, không tạo sheet, không gửi Telegram và không thay đổi trigger.
+
+- Apps Script Script Properties: `HOMEPAGE_STATS_SECRET`, khóa ngẫu nhiên riêng ít nhất 32 ký tự.
+- Homepage Vercel Production: `EXPENSES_API_SECRET` giống khóa trên; `EXPENSES_API_URL` là URL `/exec` của deployment chính.
+- Deploy source mới vào deployment Web app hiện có, giữ nguyên quyền truy cập và URL. Không chạy `setupFamilyBot()` hoặc bootstrap.
+- Redeploy Homepage để nhận cấu hình. Trang `/chi-tieu/` dùng cùng phiên mở khóa với Notes/QR.
+
+Khóa không nằm trong repo, HTML, chat hoặc log. Request từ Homepage được ký HMAC SHA-256 và có thời hạn 60 giây. Endpoint không đọc dữ liệu khi xác thực sai. Kiểm tra: `node tests/test-money-parser.js` và `node --test tests/homepage-stats.test.js`.
+
