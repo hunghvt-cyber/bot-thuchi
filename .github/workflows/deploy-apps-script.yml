@@ -3,9 +3,6 @@ on:
   # Legacy polling GAS is frozen during webhook migration.
   # Do not auto-deploy or re-create polling on main pushes.
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/deploy-apps-script.yml']
 permissions:
   contents: read
 concurrency:
@@ -13,7 +10,6 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test-and-deploy:
-    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Deploy Sheet-aligned Homepage statistics once'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -25,8 +21,6 @@ jobs:
           node-version: 24
       - name: Test money parser
         run: node tests/test-money-parser.js
-      - name: Test Homepage statistics
-        run: node --test tests/homepage-stats.test.js
       - name: Restore clasp credentials
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
