@@ -163,7 +163,7 @@ function familyReport_(period){
 }
 
 /**
- * One-time migration for exactly two existing interest-payment expenses.
+ * One-time migration for the single existing interest-payment expense.
  * Only changes category Khác -> Vay mượn; no amounts or dates modified.
  * Safe to rerun: already migrated rows no longer match.
  */
@@ -179,8 +179,8 @@ function migrateTwoInterestPayments(){
     matches.push({row:i+2,description:String(row[6]),amount:row[7]});
   });
   console.log('Interest payment candidates: '+JSON.stringify(matches));
-  if(matches.length!==2)throw new Error('Expected exactly 2 matching interest payments; found '+matches.length+'. No changes made.');
+  if(matches.length!==1)throw new Error('Expected exactly 1 matching interest payment; found '+matches.length+'. No changes made.');
   matches.forEach(function(item){sh.getRange(item.row,6).setValue('Vay mượn');});
   SpreadsheetApp.flush();
-  console.log('Updated 2 interest payments to Vay mượn.');
+  console.log('Updated 1 interest payment to Vay mượn.');
 }
