@@ -53,8 +53,26 @@ function handleFamilyMessage_(msg){
   if(cmd==='/mine'){sendText(chatId,familySummary_('month',msg.from.id));return true;}
   if(text.charAt(0)==='/')return true;
   try{var tx=parseFamilyTransaction_(text);if(!tx||!Number(tx.amount)){diagnostic('parse_skipped');return true;}var saved=appendFamilyTransaction_(msg,tx);if(saved.duplicate){diagnostic('duplicate');return true;}diagnostic('saved',String(saved.id));
-    var sent=sendText(chatId,'✓ <b>'+formatVnd_(tx.amount)+'</b> · '+escapeHtml_(tx.category||'Khác')+' · '+escapeHtml_(saved.payer)+'\n'+escapeHtml_(tx.description||text)+'\nMã GD: <code>#'+escapeHtml_(String(saved.id).slice(0,8))+'</code>');
+    var dailyTotal=familyDailyExpenseTotal_();
+    var sent=sendText(chatId,'✓ <b>'+formatVnd_(tx.amount)+'</b> · '+escapeHtml_(tx.category||'Khác')+' · '+escapeHtml_(saved.payer)+'\n'+escapeHtml_(tx.description||text)+'\n<b>Tổng chi hôm nay: '+formatVnd_(dailyTotal)+'</b>'+'\nMã GD: <code>#'+escapeHtml_(String(saved.id).slice(0,8))+'</code>');
     if(sent&&sent.result&&sent.result.message_id){var sh=familySheet_(),data=sh.getRange(2,13,sh.getLastRow()-1,1).getValues();for(var i=data.length-1;i>=0;i--){if(String(data[i][0])===String(saved.id)){sh.getRange(i+2,17).setValue(String(sent.result.message_id));break;}}}
     return true;
   }catch(e){diagnostic('error',String(e).slice(0,300));Logger.log(e.stack||e);sendText(chatId,'Không xử lý được. Thử: <code>đi chợ 450k</code>');return true;}
+}
+
+/** Sum today's active expenses across all members, independent of Telegram group ID. */
+function familyDailyExpenseTotal_(){
+  var sh=familySheet_(),last=sh.getLastRow();
+  if(last<2)return 0;
+  var rows=sh.getRange(2,1,last-1,16).getValues();
+  var today=Utilities.formatDate(new Date(),'Asia/Ho_Chi_Minh','yyyyMMdd');
+  var total=0;
+  rows.forEach(function(row){
+    var date=row[0];
+    if(!(date instanceof Date)||isNaN(date.getTime()))return;
+    if(Utilities.formatDate(date,'Asia/Ho_Chi_Minh','yyyyMMdd')!==today)return;
+    if(String(row[4])!=='ChiTieu'||String(row[15])==='DELETED')return;
+    total+=Number(row[7])||0;
+  });
+  return total;
 }
