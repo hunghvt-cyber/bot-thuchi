@@ -1,4 +1,4 @@
-var FAMILY_CATEGORIES = ['Ăn uống','Đi chợ','Gia đình','Con cái','Đi lại','Hóa đơn','Mua sắm','Sức khỏe','Giáo dục','Giải trí','Nhà cửa','Thu nhập','Khác'];
+var FAMILY_CATEGORIES = ['Ăn uống','Đi chợ','Gia đình','Con cái','Đi lại','Hóa đơn','Mua sắm','Sức khỏe','Giáo dục','Giải trí','Nhà cửa','Vay mượn','Thu nhập','Khác'];
 var FAMILY_HEADERS = ['Timestamp','Date','PayerId','Payer','Type','Category','Description','Amount','Currency','TelegramChatId','TelegramMessageId','Source','TransactionId','DedupeKey','RawText','Status','BotMessageId','UpdatedAt'];
 
 function familySpreadsheet_() {
