@@ -161,3 +161,26 @@ function familyReport_(period){
   function rank(o){return Object.keys(o).sort(function(a,b){return o[b]-o[a]}).map(function(k){return '• '+escapeHtml_(k)+': '+formatVnd_(o[k]);}).join('\n')||'Chưa có';}
   return '<b>'+labels[period]+'</b>\nChi tiêu: <b>'+formatVnd_(total)+'</b> ('+count+' giao dịch)\nThu nhập: '+formatVnd_(income)+'\nChênh lệch: '+formatVnd_(income-total)+'\n\n<b>Theo danh mục</b>\n'+rank(cats)+'\n\n<b>Theo người chi</b>\n'+rank(payers);
 }
+
+/**
+ * One-time migration for exactly two existing interest-payment expenses.
+ * Only changes category Khác -> Vay mượn; no amounts or dates modified.
+ * Safe to rerun: already migrated rows no longer match.
+ */
+function migrateTwoInterestPayments(){
+  var sh=familySheet_(), last=sh.getLastRow();
+  if(last<2)throw new Error('Transactions is empty');
+  var rows=sh.getRange(2,1,last-1,18).getValues(), matches=[];
+  rows.forEach(function(row,i){
+    var description=String(row[6]||'')+' '+String(row[14]||'');
+    if(String(row[5]).trim()!=='Khác'||String(row[4])!=='ChiTieu')return;
+    if(!/(?:đóng|trả|trả|thanh toán)\s+(?:tiền\s+)?lãi|lãi\s+(?:vay|ngân hàng)/i.test(description))return;
+    if(String(row[15])==='DELETED')return;
+    matches.push({row:i+2,description:String(row[6]),amount:row[7]});
+  });
+  console.log('Interest payment candidates: '+JSON.stringify(matches));
+  if(matches.length!==2)throw new Error('Expected exactly 2 matching interest payments; found '+matches.length+'. No changes made.');
+  matches.forEach(function(item){sh.getRange(item.row,6).setValue('Vay mượn');});
+  SpreadsheetApp.flush();
+  console.log('Updated 2 interest payments to Vay mượn.');
+}
