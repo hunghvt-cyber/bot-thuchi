@@ -163,24 +163,33 @@ function familyReport_(period){
 }
 
 /**
- * One-time migration for the single existing interest-payment expense.
- * Only changes category Khác -> Vay mượn; no amounts or dates modified.
- * Safe to rerun: already migrated rows no longer match.
+ * One-time migration of two identified interest payments.
+ * Matches description and exact amount, not category alone; idempotent.
  */
 function migrateTwoInterestPayments(){
   var sh=familySheet_(), last=sh.getLastRow();
   if(last<2)throw new Error('Transactions is empty');
-  var rows=sh.getRange(2,1,last-1,18).getValues(), matches=[];
-  rows.forEach(function(row,i){
-    var description=String(row[6]||'')+' '+String(row[14]||'');
-    if(String(row[5]).trim()!=='Khác'||String(row[4])!=='ChiTieu')return;
-    if(!/(?:đóng|trả|trả|thanh toán)\s+(?:tiền\s+)?lãi|lãi\s+(?:vay|ngân hàng)/i.test(description))return;
-    if(String(row[15])==='DELETED')return;
-    matches.push({row:i+2,description:String(row[6]),amount:row[7]});
+  var rows=sh.getRange(2,1,last-1,18).getValues();
+  var targets=[
+    {amount:3550000,pattern:/lãi\s+vay\s+noxh/i,label:'Lãi vay NOXH'},
+    {amount:2400000,pattern:/lãi\s+(?:thẻ\s+)?nam\s*á|nam\s*á.*lãi/i,label:'Lãi thẻ Nam Á'}
+  ];
+  var changes=[],already=[];
+  targets.forEach(function(target){
+    var matches=[];
+    rows.forEach(function(row,i){
+      var description=String(row[6]||'')+' '+String(row[14]||'');
+      if(Number(row[7])!==target.amount||!target.pattern.test(description))return;
+      if(String(row[4])!=='ChiTieu'||String(row[15])==='DELETED')return;
+      if(['Khác','Vay mượn'].indexOf(String(row[5]).trim())<0)return;
+      matches.push({row:i+2,category:String(row[5]),description:String(row[6]),amount:row[7]});
+    });
+    if(matches.length!==1)throw new Error(target.label+': expected exactly 1 match, found '+matches.length+'. No changes made.');
+    if(matches[0].category==='Khác')changes.push(matches[0]);
+    else already.push(matches[0]);
   });
-  console.log('Interest payment candidates: '+JSON.stringify(matches));
-  if(matches.length!==1)throw new Error('Expected exactly 1 matching interest payment; found '+matches.length+'. No changes made.');
-  matches.forEach(function(item){sh.getRange(item.row,6).setValue('Vay mượn');});
+  console.log('To update: '+JSON.stringify(changes)+'; already migrated: '+JSON.stringify(already));
+  changes.forEach(function(item){sh.getRange(item.row,6).setValue('Vay mượn');});
   SpreadsheetApp.flush();
-  console.log('Updated 1 interest payment to Vay mượn.');
+  console.log('Updated '+changes.length+' interest payments to Vay mượn; '+already.length+' already correct.');
 }
