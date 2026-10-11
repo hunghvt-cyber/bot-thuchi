@@ -25,6 +25,7 @@ function getWebhookInfo(){ return telegramApi_('getWebhookInfo',{}); }
 function registerFamilyCommands_(){
   var commands=[
     {command:'help',description:'Hướng dẫn sử dụng'},
+    {command:'scan',description:'Reply ảnh bill của bạn để đọc tổng tiền'},
     {command:'giaodich',description:'Xem giao dịch và mã để sửa hoặc xóa'},
     {command:'clear',description:'Dọn tin nhắn bot trong nhóm'},
     {command:'xoa',description:'Xóa giao dịch theo mã'},
@@ -51,3 +52,4 @@ function clearLegacyBotCommands(){
   scopes.forEach(function(scope){var result=telegramApi_('getMyCommands',{scope:scope});if(result.result&&result.result.length)throw new Error('Legacy commands remain in '+scope.type);});
   console.log('Old Telegram bot commands cleared; new bot untouched.');
 }
+

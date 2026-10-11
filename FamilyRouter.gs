@@ -6,6 +6,7 @@ function handleFamilyMessage_(msg,alreadyLocked){
     return true;
   }
   try{familyRememberUserMessage_(msg);}catch(trackError){Logger.log('User message tracking: '+trackError);}
+  if(alreadyLocked&&receiptScanCommand_(msg,text))return true;
   if(alreadyLocked&&handleReceiptPhoto_(msg,true))return true;
   if(!text)return true;
   if(alreadyLocked&&receiptEditDraft_(msg,text))return true;
@@ -17,7 +18,7 @@ function handleFamilyMessage_(msg,alreadyLocked){
       '• <code>mì tôm 10k</code>\n'+
       '• <code>đi chợ 630</code> (630.000đ)\n'+
       '• <code>học phí 2tr5</code> (2.500.000đ)\n\n'+
-      'Gửi ảnh bill: bot đọc tổng tiền, bấm Ghi chi tiêu sau khi kiểm tra.\n\n'+
+      'Gửi ảnh bill: bot đọc tổng tiền, bấm Ghi chi tiêu sau khi kiểm tra. Nếu bot không thấy ảnh, Reply vào ảnh của bạn rồi gửi /scan (hoặc /scan@ten_bot).\n\n'+
       '<b>2. Báo cáo</b>\n'+
       '• /baocaongay — hôm nay\n'+
       '• /baocaotuan — tuần này\n'+
@@ -68,8 +69,8 @@ function doPost(e){
 function doGet(e){
   try{
     if(e&&e.parameter&&e.parameter.diagnostic==='1'){
-      var info=getWebhookInfo().result||{};
-      return ContentService.createTextOutput(JSON.stringify({ok:true,mode:info.url?'webhook':'polling',pending:info.pending_update_count||0,lastError:info.last_error_message||'',groupConfigured:!!familyGroupId_(),pollTriggers:ScriptApp.getProjectTriggers().filter(function(t){return t.getHandlerFunction()==='pollFamilyTelegram_';}).length,commands:registerFamilyCommands_().result.length,lastPollStart:PropertiesService.getScriptProperties().getProperty('POLL_LAST_START')||'',lastPollSuccess:PropertiesService.getScriptProperties().getProperty('POLL_LAST_SUCCESS')||'',lastPollError:PropertiesService.getScriptProperties().getProperty('POLL_LAST_ERROR')||'',lastBatchSize:PropertiesService.getScriptProperties().getProperty('POLL_LAST_BATCH_SIZE')||''})).setMimeType(ContentService.MimeType.JSON);
+      var info=getWebhookInfo().result||{},me=telegramApi_('getMe',{}).result||{},member=familyGroupId_()?telegramApi_('getChatMember',{chat_id:familyGroupId_(),user_id:me.id}).result||{}:{};
+      return ContentService.createTextOutput(JSON.stringify({ok:true,mode:info.url?'webhook':'polling',pending:info.pending_update_count||0,lastError:info.last_error_message||'',groupConfigured:!!familyGroupId_(),groupPhotosVisible:me.can_read_all_group_messages===true||member.status==='administrator'||member.status==='creator',botGroupStatus:member.status||'',pollTriggers:ScriptApp.getProjectTriggers().filter(function(t){return t.getHandlerFunction()==='pollFamilyTelegram_';}).length,commands:(telegramApi_('getMyCommands',{scope:{type:'all_group_chats'}}).result||[]).length,lastPollStart:PropertiesService.getScriptProperties().getProperty('POLL_LAST_START')||'',lastPollSuccess:PropertiesService.getScriptProperties().getProperty('POLL_LAST_SUCCESS')||'',lastPollError:PropertiesService.getScriptProperties().getProperty('POLL_LAST_ERROR')||'',lastBatchSize:PropertiesService.getScriptProperties().getProperty('POLL_LAST_BATCH_SIZE')||''})).setMimeType(ContentService.MimeType.JSON);
     }
     if(e&&e.parameter&&e.parameter.bootstrap==='1'){
       var r=setupFamilyBot();

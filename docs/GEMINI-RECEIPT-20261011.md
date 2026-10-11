@@ -23,3 +23,7 @@ Không bật thanh toán. Billing tier Google chưa được xác minh; code dù
 Workflow deploy production chạy kiểm thử rồi clasp push/update deployment hiện có; không setup/bootstrap, không đổi polling/offset/Script Properties. Trước đây workflow chỉ dispatch sau thí nghiệm webhook đã đóng; trigger push cho các file source/test chỉ deploy với marker `[deploy-gemini]` trong commit; dispatch vẫn dùng như trước. Rollback bằng revert rồi deploy workflow. Không xóa ledger.
 
 Kiểm thử: `node --test tests/*.test.js`, `node tests/test-money-parser.js`, parse tất cả `.gs` bằng Node VM. Test giả lập các dịch vụ Google/Telegram; cần thử ảnh bill thực trên nhóm sau deploy để xác nhận model/khóa/quota.
+
+## Group photo recovery
+
+The live diagnostic reported zero polling triggers and stale polling timestamps. The existing bootstrap restored one polling trigger without dropping pending updates. `/scan` (including `/scan@botname`) now accepts a reply to the sender’s own photo, so scanning does not require receipt of an unsolicited group photo under Telegram privacy mode. Drafts, scan errors, and confirmation responses retain `message_thread_id`. Confirmation and original-photo dedupe still apply. Diagnostic GET is now read-only and reports group photo visibility from getMe + getChatMember.

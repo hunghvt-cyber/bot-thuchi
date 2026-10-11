@@ -8,11 +8,28 @@ function normalizeReceipt_(value) {
   return {amount:value.amount,type:'ChiTieu',category:category,description:description,date:date};
 }
 function receiptDraftKey_(token){return 'RECEIPT_'+token;}
+function receiptReplyOptions_(msg,extra){
+  var options=extra||{};
+  if(msg.message_thread_id)options.message_thread_id=msg.message_thread_id;
+  return options;
+}
+function receiptScanCommand_(msg,text){
+  if(!/^\/scan(?:@[a-zA-Z0-9_]+)?(?:\s|$)/i.test(text))return false;
+  var original=msg.reply_to_message;
+  if(!original||(!original.photo&&!original.document)){
+    sendText(msg.chat.id,'Reply vào ảnh bill của bạn rồi gửi <code>/scan</code>.',receiptReplyOptions_(msg));return true;
+  }
+  if(!original.from||!msg.from||String(original.from.id)!==String(msg.from.id)){
+    sendText(msg.chat.id,'Hãy Reply vào ảnh bill do chính bạn gửi.',receiptReplyOptions_(msg));return true;
+  }
+  var photoMessage={chat:msg.chat,from:msg.from,message_id:original.message_id,photo:original.photo,document:original.document,caption:original.caption,message_thread_id:msg.message_thread_id};
+  return handleReceiptPhoto_(photoMessage,true);
+}
 function handleReceiptPhoto_(msg,alreadyLocked) {
   var photo=Array.isArray(msg.photo)&&msg.photo.length?msg.photo[msg.photo.length-1]:null,document=msg.document;
   if(!photo&&!document)return false;
   if(document&&!/^image\/(jpeg|png|webp)$/.test(document.mime_type||'')){
-    sendText(msg.chat.id,'Scan bill hỗ trợ ảnh JPG, PNG hoặc WebP. Gửi một ảnh hóa đơn mỗi lần.');return true;
+    sendText(msg.chat.id,'Scan bill hỗ trợ ảnh JPG, PNG hoặc WebP. Gửi một ảnh hóa đơn mỗi lần.',receiptReplyOptions_(msg));return true;
   }
   // Never scan outside an explicitly bound family group.
   if(!familyGroupId_()||String(familyGroupId_())!==String(msg.chat.id))return true;
@@ -32,12 +49,12 @@ function handleReceiptPhoto_(msg,alreadyLocked) {
     var raw=sharedGemini_([{role:'user',parts:[{text:prompt},{inlineData:{mimeType:photo?'image/jpeg':document.mime_type,data:Utilities.base64Encode(bytes)}}]}],true);
     var tx;try{tx=normalizeReceipt_(JSON.parse(raw));}catch(e){throw new Error('Chưa đọc được tổng tiền VND chắc chắn. Gửi ảnh rõ hơn hoặc nhập chi tiêu bằng chữ.');}
     var token=Utilities.getUuid().replace(/-/g,'').slice(0,20);
-    var state={chatId:String(msg.chat.id),userId:String(msg.from.id),from:msg.from,messageId:msg.message_id,tx:tx,expires:Date.now()+600000};
+    var state={chatId:String(msg.chat.id),userId:String(msg.from.id),from:msg.from,messageId:msg.message_id,message_thread_id:msg.message_thread_id,tx:tx,expires:Date.now()+600000};
     cache.put(receiptDraftKey_(token),JSON.stringify(state),600);
-    var sent=sendText(msg.chat.id,'<b>ĐÃ ĐỌC BILL — CHƯA GHI CHI TIÊU</b>\nTổng: <b>'+formatVnd_(tx.amount)+'</b>\nDanh mục: '+escapeHtml_(tx.category)+'\n'+escapeHtml_(tx.description)+'\nNgày trên bill: '+escapeHtml_(tx.date||'Không đọc rõ')+'\n\nKiểm tra rồi bấm Ghi chi tiêu để ghi vào hôm nay. Sai tiền: Reply tin này với <code>sửa tiền 85k</code>. Bản nháp hết hạn sau 10 phút.',{reply_markup:{inline_keyboard:[[{text:'Ghi chi tiêu',callback_data:'bill:yes:'+token},{text:'Hủy',callback_data:'bill:no:'+token}]]}});
+    var sent=sendText(msg.chat.id,'<b>ĐÃ ĐỌC BILL — CHƯA GHI CHI TIÊU</b>\nTổng: <b>'+formatVnd_(tx.amount)+'</b>\nDanh mục: '+escapeHtml_(tx.category)+'\n'+escapeHtml_(tx.description)+'\nNgày trên bill: '+escapeHtml_(tx.date||'Không đọc rõ')+'\n\nKiểm tra rồi bấm Ghi chi tiêu để ghi vào hôm nay. Sai tiền: Reply tin này với <code>sửa tiền 85k</code>. Bản nháp hết hạn sau 10 phút.',receiptReplyOptions_(msg,{reply_markup:{inline_keyboard:[[{text:'Ghi chi tiêu',callback_data:'bill:yes:'+token},{text:'Hủy',callback_data:'bill:no:'+token}]]}}));
     if(sent&&sent.result){state.botMessageId=sent.result.message_id;cache.put(receiptDraftKey_(token),JSON.stringify(state),600);cache.put('RECEIPT_REPLY_'+msg.chat.id+'_'+sent.result.message_id,token,600);}
     cache.put(seen,'1',600);
-  }catch(e){sendText(msg.chat.id,escapeHtml_(e.message||'Không đọc được bill. Thử ảnh rõ hơn.'));}
+  }catch(e){sendText(msg.chat.id,escapeHtml_(e.message||'Không đọc được bill. Thử ảnh rõ hơn.'),receiptReplyOptions_(msg));}
   return true;
 }
 function receiptEditDraft_(msg,text) {
@@ -45,10 +62,10 @@ function receiptEditDraft_(msg,text) {
   var cache=CacheService.getScriptCache(),token=cache.get('RECEIPT_REPLY_'+msg.chat.id+'_'+msg.reply_to_message.message_id);
   if(!token)return false;
   var state;try{state=JSON.parse(cache.get(receiptDraftKey_(token))||'null');}catch(e){}
-  if(!state||state.expires<Date.now()){sendText(msg.chat.id,'Bản nháp đã hết hạn. Gửi lại ảnh bill.');return true;}
-  if(state.userId!==String(msg.from.id)){sendText(msg.chat.id,'Chỉ người gửi bill được sửa bản nháp.');return true;}
+  if(!state||state.expires<Date.now()){sendText(msg.chat.id,'Bản nháp đã hết hạn. Gửi lại ảnh bill.',receiptReplyOptions_(msg));return true;}
+  if(state.userId!==String(msg.from.id)){sendText(msg.chat.id,'Chỉ người gửi bill được sửa bản nháp.',receiptReplyOptions_(msg));return true;}
   var m=String(text).match(/^sửa\s+(?:tiền|số tiền)\s+(.+)$/i),amount=m&&parseMoneyLocal_(m[1]);
-  if(!Number.isSafeInteger(amount)||amount<=0||amount>1000000000){sendText(msg.chat.id,'Reply <code>sửa tiền 85k</code> để sửa tổng tiền, rồi bấm Ghi chi tiêu.');return true;}
+  if(!Number.isSafeInteger(amount)||amount<=0||amount>1000000000){sendText(msg.chat.id,'Reply <code>sửa tiền 85k</code> để sửa tổng tiền, rồi bấm Ghi chi tiêu.',receiptReplyOptions_(msg));return true;}
   state.tx.amount=amount;cache.put(receiptDraftKey_(token),JSON.stringify(state),Math.max(1,Math.ceil((state.expires-Date.now())/1000)));
   telegramApi_('editMessageText',{chat_id:state.chatId,message_id:state.botMessageId,text:'Đã sửa tổng tiền: '+formatVnd_(amount)+'\n'+state.tx.category+' · '+state.tx.description+'\nNgày trên bill: '+(state.tx.date||'Không đọc rõ')+'\nChưa ghi chi tiêu. Kiểm tra rồi xác nhận.',reply_markup:{inline_keyboard:[[{text:'Ghi '+formatVnd_(amount),callback_data:'bill:yes:'+token},{text:'Hủy',callback_data:'bill:no:'+token}]]}});
   return true;
@@ -73,7 +90,7 @@ function receiptCallback_(callback,alreadyLocked) {
     cache.remove(key);
     if(saved.duplicate){ack('Bill đã được ghi trước đó.');return true;}
     ack('Đã ghi chi tiêu.');
-    var sent=sendText(state.chatId,'✓ <b>'+formatVnd_(tx.amount)+'</b> · '+escapeHtml_(tx.category)+' · '+escapeHtml_(saved.payer)+'\n'+escapeHtml_(tx.description)+'\nĐã ghi vào hôm nay.\nMã GD: <code>#'+escapeHtml_(saved.id.slice(0,8))+'</code>');
+    var sent=sendText(state.chatId,'✓ <b>'+formatVnd_(tx.amount)+'</b> · '+escapeHtml_(tx.category)+' · '+escapeHtml_(saved.payer)+'\n'+escapeHtml_(tx.description)+'\nĐã ghi vào hôm nay.\nMã GD: <code>#'+escapeHtml_(saved.id.slice(0,8))+'</code>',receiptReplyOptions_(state));
     if(sent&&sent.result){var found=familyTxnById_(state.chatId,saved.id);if(found&&!found.ambiguous)found.sheet.getRange(found.row,17).setValue(String(sent.result.message_id));}
   }catch(e){ack('Không ghi được. Kiểm tra /giaodich trước khi thử lại.');}
   finally{if(!alreadyLocked)lock.releaseLock();}

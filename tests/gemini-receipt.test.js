@@ -40,3 +40,21 @@ test('unbound/wrong group, unsupported file, expiry and cancellation do not writ
  cache.set(key,JSON.stringify({chatId:'-100',userId:'7',expires:Date.now()+60000}));cb.data='bill:no:12345678901234567890';c.receiptCallback_(cb,true);assert.equal(cache.has(key),false);assert.equal(rows.length,0);
  c.familyGroupId_=()=>'';assert.equal(c.handleReceiptPhoto_({chat:{id:'-100'},photo:[{file_id:'test'}]},true),true);assert.equal(rows.length,0);
 });
+test('group router scans an own photo supplied inside a /scan reply and preserves topic',()=>{
+ const {c,sent,rows}=context();c.familyRememberUserMessage_=()=>{};
+ c.sharedGemini_=()=>JSON.stringify({isReceipt:true,currency:'VND',amount:85000,category:'Đi chợ',description:'Shop'});
+ vm.runInContext(fs.readFileSync(__dirname+'/../FamilyRouter.gs','utf8'),c);
+ const msg={chat:{id:'-100'},from:{id:7},message_id:9,message_thread_id:42,text:'/scan@expense_bot',reply_to_message:{from:{id:7},message_id:4,photo:[{file_id:'test'}]}};
+ c.handleFamilyMessage_(msg,true);
+ assert.equal(sent.length,1);assert.match(sent[0].text,/ĐÃ ĐỌC BILL/);assert.equal(sent[0].extra.message_thread_id,42);assert.equal(rows.length,0);
+ const data=sent[0].extra.reply_markup.inline_keyboard[0][0].callback_data;
+ c.receiptCallback_({id:'cb',message:{chat:{id:'-100'}},from:{id:7},data},true);
+ assert.equal(rows[0].msg.message_id,4);assert.equal(sent[1].extra.message_thread_id,42);
+});
+test('/scan gives guidance without an image and rejects another person’s bill',()=>{
+ const {c,sent,rows}=context();let scans=0;c.handleReceiptPhoto_=()=>{scans++;return true;};
+ const msg={chat:{id:'-100'},from:{id:7},message_thread_id:42};
+ assert.equal(c.receiptScanCommand_(msg,'/scan'),true);assert.match(sent[0].text,/Reply/);assert.equal(sent[0].extra.message_thread_id,42);
+ msg.reply_to_message={from:{id:8},photo:[{file_id:'test'}]};c.receiptScanCommand_(msg,'/scan');assert.equal(scans,0);assert.equal(rows.length,0);
+ assert.equal(c.receiptScanCommand_(msg,'ok'),false);
+});
