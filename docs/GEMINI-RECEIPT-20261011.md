@@ -1,6 +1,6 @@
 # Gemini chat và scan bill
 
-Dùng lại `GEMINI_API_KEY` và `GEMINI_MODEL` trong Script Properties, không Gemini CLI, không NAS, không tạo khóa mới hoặc bật billing.
+Dùng lại `GEMINI_API_KEY`; tính năng mới dùng `GEMINI_SHARED_MODEL` (mặc định `gemini-3.5-flash-lite`, có Free Tier theo Google) trong Script Properties, không Gemini CLI, không NAS, không tạo khóa mới hoặc bật billing.
 
 ## Scan bill
 

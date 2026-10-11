@@ -2,7 +2,7 @@
 function sharedGemini_(contents,jsonOutput) {
   var key=getGeminiApiKey();
   if(!key){var missing=new Error('Chưa cấu hình Gemini.');missing.reason='CONFIG';throw missing;}
-  var model=getGeminiModel();
+  var model=getScriptProp_('GEMINI_SHARED_MODEL')||'gemini-3.5-flash-lite';
   if(!/^[a-zA-Z0-9._-]+$/.test(model))throw new Error('Model Gemini không hợp lệ.');
   var config={maxOutputTokens:2048};
   if(jsonOutput)config.responseMimeType='application/json';
@@ -55,5 +55,5 @@ function homepageChat_(envelope) {
     if(total>24000)return output({ok:false});
     sharedGeminiQuota_('CHAT',30);
     return output({ok:true,text:sharedGemini_(contents,false)});
-  }catch(e){return output({ok:false,code:e.code===429?429:502,reason:['CONFIG','HTTP','INCOMPLETE'].indexOf(e.reason)>=0?e.reason:'UNKNOWN',upstreamStatus:Number(e.upstreamStatus)||null,model:getGeminiModel()});}
+  }catch(e){return output({ok:false,code:e.code===429?429:502,reason:['CONFIG','HTTP','INCOMPLETE'].indexOf(e.reason)>=0?e.reason:'UNKNOWN',upstreamStatus:Number(e.upstreamStatus)||null,model:getScriptProp_('GEMINI_SHARED_MODEL')||'gemini-3.5-flash-lite'});}
 }
