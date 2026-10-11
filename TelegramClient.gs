@@ -1,7 +1,7 @@
 function telegramApi_(method,payload){
   var token=getBotToken();
   if(!token) throw new Error('Thiếu BOT_TOKEN');
-  var r=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'post',contentType:'application/json',payload:JSON.stringify(payload||{}),muteHttpExceptions:true});
+  var r;try{r=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'post',contentType:'application/json',payload:JSON.stringify(payload||{}),muteHttpExceptions:true});}catch(networkError){throw new Error('Telegram '+method+': kết nối tạm thời lỗi.');}
   if(r.getResponseCode()<200||r.getResponseCode()>=300) throw new Error('Telegram '+method+' HTTP '+r.getResponseCode()+': '+r.getContentText());
   var body=JSON.parse(r.getContentText());
   if(!body.ok) throw new Error('Telegram '+method+': '+(body.description||'API error'));
