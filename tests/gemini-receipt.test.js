@@ -1,4 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),crypto=require('node:crypto');
+test('all Apps Script modules are included in clasp deployment',()=>{
+ const allow=fs.readFileSync(__dirname+'/../.claspignore','utf8').split(/\r?\n/);
+ for(const file of fs.readdirSync(__dirname+'/..').filter(f=>f.endsWith('.gs')))assert.ok(allow.includes('!'+file),'Module excluded: '+file);
+});
 function context(){
  const props=new Map(),cache=new Map(),sent=[],calls=[],rows=[];
  let releases=0;
