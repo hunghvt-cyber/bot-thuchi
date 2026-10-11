@@ -3,7 +3,7 @@ on:
   # Production uses the existing polling trigger; deploy code without bootstrap.
   push:
     branches: [main]
-    paths: ["*.gs", "appsscript.json", "tests/**", ".github/workflows/deploy-apps-script.yml"]
+    paths: ["*.gs", "appsscript.json", ".claspignore", "tests/**", ".github/workflows/deploy-apps-script.yml"]
   workflow_dispatch:
 permissions:
   contents: read
