@@ -2,8 +2,16 @@
  * Webhook entrypoint for the NEW GAS only.
  * Financial routing is gated until cutover; benchmark commands remain available.
  */
-function doGet(){return HtmlService.createHtmlOutput('poorman-webhook-ready');}
+function doGet(e){
+  if(e&&e.parameter&&(e.parameter.diagnostic==='1'||e.parameter.installReceipt==='1')){
+    try{if(e.parameter.installReceipt==='1')installReceiptWebhook_();return ContentService.createTextOutput(JSON.stringify(receiptWebhookDiagnostic_())).setMimeType(ContentService.MimeType.JSON);}
+    catch(err){return ContentService.createTextOutput(JSON.stringify({ok:false,error:'Không hoàn tất cấu hình receipt webhook.'})).setMimeType(ContentService.MimeType.JSON);}
+  }
+  return HtmlService.createHtmlOutput('poorman-webhook-ready');
+}
 function doPost(e){
+  var webhookSecret=getScriptProp_('RECEIPT_WEBHOOK_SECRET');
+  if(webhookSecret&&!receiptWebhookKeyMatches_(e&&e.parameter&&e.parameter.key,webhookSecret))return HtmlService.createHtmlOutput('OK');
   var started=Date.now(),diag={at:new Date().toISOString(),stage:'received'};
   try{
     var u=JSON.parse(e&&e.postData&&e.postData.contents||'{}');
@@ -30,7 +38,7 @@ function doPost(e){
       // The ledger append and reset callback each acquire their own script lock.
       // Do NOT lock the entire handler (nested ScriptLock is not reentrant).
       if(msg)handleFamilyMessage_(msg);
-      if(cb)familyResetCallback_(cb);
+      if(cb&&!(webhookSecret&&receiptCallback_(cb,false)))familyResetCallback_(cb);
       diag.stage='handled';
     }
   }catch(err){
@@ -74,3 +82,4 @@ function showRecentWebhookLogs(){
  var n=sh.getLastRow();if(n<2)return;
  sh.getRange(Math.max(2,n-19),1,Math.min(20,n-1),9).getDisplayValues().forEach(function(row){console.log(JSON.stringify(row));});
 }
+

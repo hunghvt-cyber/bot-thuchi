@@ -1,7 +1,7 @@
 function telegramApi_(method,payload){
   var token=getBotToken();
   if(!token) throw new Error('Thiếu BOT_TOKEN');
-  var r=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'post',contentType:'application/json',payload:JSON.stringify(payload||{}),muteHttpExceptions:true});
+  var r;try{r=UrlFetchApp.fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'post',contentType:'application/json',payload:JSON.stringify(payload||{}),muteHttpExceptions:true});}catch(networkError){throw new Error('Telegram '+method+': kết nối tạm thời lỗi.');}
   if(r.getResponseCode()<200||r.getResponseCode()>=300) throw new Error('Telegram '+method+' HTTP '+r.getResponseCode()+': '+r.getContentText());
   var body=JSON.parse(r.getContentText());
   if(!body.ok) throw new Error('Telegram '+method+': '+(body.description||'API error'));
@@ -21,6 +21,7 @@ function getWebhookInfo(){ return telegramApi_('getWebhookInfo',{}); }
 function registerFamilyCommands_(){
   var commands=[
     {command:'help',description:'Hướng dẫn sử dụng'},
+    {command:'scan',description:'Reply ảnh bill của bạn để đọc tổng tiền'},
     {command:'giaodich',description:'Xem giao dịch và mã để sửa hoặc xóa'},
     {command:'clear',description:'Dọn tin nhắn bot trong nhóm'},
     {command:'xoa',description:'Xóa giao dịch theo mã'},
@@ -37,3 +38,4 @@ function registerFamilyCommands_(){
   telegramApi_('setMyCommands',{commands:commands,scope:{type:'all_group_chats'}});
   return telegramApi_('getMyCommands',{scope:{type:'all_group_chats'}});
 }
+

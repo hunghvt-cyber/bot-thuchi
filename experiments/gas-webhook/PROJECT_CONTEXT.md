@@ -81,3 +81,12 @@ Source files on `main`: `Config.gs`, `FamilyConfig.gs`, `FamilyLedger.gs`, `Fami
 - **Old main workflow changed** in commit `5d5419399fa5b90ebd418859532b61d1660d9952`: no automatic deployment on push, no bootstrap that re-creates polling; manual workflow remains available. This does NOT delete the existing GAS polling trigger.
 - **NEXT USER ACTION:** In OLD production GAS editor (script ID `1sYaIFrLfzoj18ZbcXDwAEjuXBi-Y7iNPLZX2MqeFP2PV8I2SfFfLLFxt`), open Triggers and delete ONLY trigger handler `pollFamilyTelegram_`. Confirm removal. Then in NEW GAS run `inspectNewBotReadiness()` and `activateNewFamilyWebhook()`. Test one controlled expense in family group, verify single new Sheets row, test /today and soft delete. Do not delete existing data.
 - Old daily report was invoked by old polling; after trigger removal, new daily trigger must be present and enabled to maintain 21h report.
+
+
+## Receipt scan — 2026-10-11
+
+The active user bot is @PoormanTest0219_bot on this branch and GAS, not the root/main polling bot @Botnhangheo_bot. Receipt scanning is now implemented here: photos and JPG/PNG/WebP documents, own-photo /scan reply, JSON VND total validation, temporary draft, owner-only confirm/cancel/edit, original Telegram message dedupe, and forum topic preservation. Atomic ledger append accepts a caller-owned lock to avoid a nested ScriptLock in receipt confirmation. Existing Sheets and daily-report flow remain in use.
+
+Install receipt webhook after deploying via GET ?installReceipt=1. Installer requires this exact bot, active family webhook, bound group membership, and existing expected webhook; it generates a query secret in Script Properties, sets the same deployment URL plus the secret, retains pending updates and subscribes to message/callback_query. It never returns secrets or changes token, group, activation, or ledger. doPost validates the query secret before routing once installed; HtmlService acknowledgement remains unchanged. Diagnostic GET ?diagnostic=1 returns only health metadata. GEMINI_SHARED_MODEL defaults to gemini-3.5-flash-lite, 20 receipt calls/day, no automatic retries.
+
+The previous assistant mistakenly installed receipt code and revived polling on root/main. Recovery code removes only the retired Botnhangheo_bot polling triggers when Telegram confirms that bot left the configured group; Homepage’s existing chat bridge remains on old GAS. Do not re-bootstrap the old bot.

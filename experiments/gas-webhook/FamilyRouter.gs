@@ -2,12 +2,14 @@ function isFamilyGroupAllowed_(chatId){var x=familyGroupId_();return !x||String(
 function handleFamilyMessage_(msg){
   var chatId=msg.chat.id,text=String(msg.text||'').trim();
   var diagnostic=function(stage,detail){try{PropertiesService.getScriptProperties().setProperty('FAMILY_LAST_TRANSACTION_DIAGNOSTIC',JSON.stringify({at:new Date().toISOString(),stage:stage,chat_id:String(chatId),message_id:msg.message_id,from_id:msg.from&&msg.from.id,detail:detail||''}));}catch(ignore){}};
-  if(!text){diagnostic('no_text');return true;}
   if(!isFamilyGroupAllowed_(chatId)){
     if(text.charAt(0)==='/'||/^\s*(xóa|xoá|khôi phục|sửa\s)/i.test(text))sendText(chatId,'Bot đang khóa với một nhóm Telegram khác. Dùng /whoami trong nhóm đã đăng ký hoặc kiểm tra FAMILY_GROUP_ID trong Apps Script.');
     return true;
   }
   try{familyRememberUserMessage_(msg);}catch(trackError){Logger.log('User message tracking: '+trackError);}
+  if(getScriptProp_('RECEIPT_WEBHOOK_SECRET')&&(receiptScanCommand_(msg,text)||handleReceiptPhoto_(msg,false)))return true;
+  if(!text){diagnostic('no_text');return true;}
+  if(receiptEditDraft_(msg,text))return true;
   var cmd=text.split(/\s+/)[0].split('@')[0].toLowerCase();
   if(cmd==='/start'||cmd==='/help'){
     sendText(chatId,
@@ -16,6 +18,7 @@ function handleFamilyMessage_(msg){
       '• <code>mì tôm 10k</code>\n'+
       '• <code>đi chợ 630</code> (630.000đ)\n'+
       '• <code>học phí 2tr5</code> (2.500.000đ)\n\n'+
+      'Gửi ảnh bill để đọc tổng tiền, kiểm tra rồi bấm Ghi chi tiêu. Nếu ảnh không được nhận, Reply ảnh của bạn rồi gửi /scan@PoormanTest0219_bot.\n\n'+
       '<b>2. Báo cáo</b>\n'+
       '• /baocaongay — hôm nay\n'+
       '• /baocaotuan — tuần này\n'+
@@ -76,3 +79,4 @@ function familyDailyExpenseTotal_(){
   });
   return total;
 }
+

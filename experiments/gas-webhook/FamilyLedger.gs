@@ -58,10 +58,10 @@ function isDuplicate_(key){
   var sh=familySheet_(), last=sh.getLastRow(); if(last<2) return false;
   return sh.getRange(2,14,last-1,1).getDisplayValues().some(function(r){return r[0]===key;});
 }
-function appendFamilyTransaction_(msg,tx) {
+function appendFamilyTransaction_(msg,tx,alreadyLocked) {
   // Atomic across concurrent webhook invocations. Do not acquire this lock in doPost.
   var lock=LockService.getScriptLock();
-  if(!lock.tryLock(20000))throw new Error('Ledger busy; retry transaction');
+  if(!alreadyLocked&&!lock.tryLock(20000))throw new Error('Ledger busy; retry transaction');
   try{
     var sh=familySheet_(),key=telegramDedupeKey_(msg);
     if(isDuplicate_(key))return {duplicate:true};
@@ -69,7 +69,7 @@ function appendFamilyTransaction_(msg,tx) {
     sh.appendRow([now,Utilities.formatDate(now,'Asia/Ho_Chi_Minh','dd/MM/yyyy'),String(msg.from.id),payer,tx.type||'ChiTieu',tx.category||'Khác',tx.description||msg.text,Number(tx.amount),'VND',String(msg.chat.id),String(msg.message_id),'telegram',id,key,String(msg.text||'')]);
     SpreadsheetApp.flush();
     return {id:id,payer:payer,duplicate:false};
-  }finally{lock.releaseLock();}
+  }finally{if(!alreadyLocked)lock.releaseLock();}
 }
 function familySummary_(period,payerId){
   var data=familySheet_().getDataRange().getValues(),now=new Date(),total=0,cats={};
@@ -193,3 +193,4 @@ function migrateTwoInterestPayments(){
   SpreadsheetApp.flush();
   console.log('Updated '+changes.length+' interest payments to Vay mượn; '+already.length+' already correct.');
 }
+

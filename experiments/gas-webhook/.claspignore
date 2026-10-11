@@ -1,0 +1,15 @@
+**/**
+!appsscript.json
+!ReceiptWebhook.gs
+!WebhookSetup.gs
+!FamilyRouter.gs
+!TelegramClient.gs
+!FamilyLedger.gs
+!Cutover.gs
+!Code.gs
+!ReceiptGemini.gs
+!Config.gs
+!FamilyConfig.gs
+!ReceiptScan.gs
+!FamilyCommands.gs
+!DailyReport.gs

@@ -22,6 +22,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Verify receipt and webhook behavior
+        working-directory: experiments/gas-webhook
+        run: node --test tests/*.test.js
       - name: Restore existing clasp credentials
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
@@ -35,3 +38,4 @@ jobs:
       - name: Create separate test web app deployment
         working-directory: experiments/gas-webhook
         run: npx --yes @google/clasp@3.4.1 update-deployment "AKfycby9V-wbbucC9zTBRfMdCM5Tf8qsJRlMVeQtOfyKmrtuOVmLs1USBcTTMbe4J2ExhpQn" --description "Isolated webhook benchmark ${GITHUB_SHA}"
+
