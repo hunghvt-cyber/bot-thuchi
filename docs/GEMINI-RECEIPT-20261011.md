@@ -27,3 +27,5 @@ Kiểm thử: `node --test tests/*.test.js`, `node tests/test-money-parser.js`, 
 ## Group photo recovery
 
 The live diagnostic reported zero polling triggers and stale polling timestamps. The existing bootstrap restored one polling trigger without dropping pending updates. `/scan` (including `/scan@botname`) now accepts a reply to the sender’s own photo, so scanning does not require receipt of an unsolicited group photo under Telegram privacy mode. Drafts, scan errors, and confirmation responses retain `message_thread_id`. Confirmation and original-photo dedupe still apply. Diagnostic GET is now read-only and reports group photo visibility from getMe + getChatMember.
+
+Post-recovery diagnostic: polling trigger count 1, recent successful polls, no polling error, 15 registered commands. Telegram `getChatMember` reports `left` for the configured bot in `FAMILY_GROUP_ID`. Receiving photos still requires membership in the correct group; no token or group binding was changed. The diagnostic now includes the public bot username and excludes left/kicked membership when reporting photo visibility.

@@ -19,6 +19,17 @@ function pollFamilyTelegram_(){
   if(!lock.tryLock(1000))return;
   try{
     var props=PropertiesService.getScriptProperties();
+    // The family group has moved to PoormanTest0219_bot. Undo accidental
+    // polling revival only when Telegram confirms the retired bot has left.
+    var me=telegramApi_('getMe',{}).result||{};
+    if(me.username==='Botnhangheo_bot'&&familyGroupId_()){
+      var member=telegramApi_('getChatMember',{chat_id:familyGroupId_(),user_id:me.id}).result||{};
+      if(member.status==='left'||member.status==='kicked'){
+        ScriptApp.getProjectTriggers().filter(function(t){return t.getHandlerFunction()==='pollFamilyTelegram_';}).forEach(function(t){ScriptApp.deleteTrigger(t);});
+        props.setProperty('POLL_RETIRED_AT',new Date().toISOString());
+        return;
+      }
+    }
     props.setProperty('POLL_LAST_START',new Date().toISOString());
     props.deleteProperty('POLL_LAST_ERROR');
     var offset=Number(props.getProperty('TELEGRAM_UPDATE_OFFSET')||0);
