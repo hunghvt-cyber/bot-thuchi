@@ -67,3 +67,10 @@ test('webhook rejects forged requests before routing or diagnostic writes',()=>{
  c.doPost(event);assert.equal(routed,0);assert.equal(props.has('TEST_LAST_DIAGNOSTIC'),false);
  event.parameter.key='long-test-secret';c.doPost(event);assert.equal(routed,1);
 });
+test('plain photo reaches the group receipt handler before the no-text path',()=>{
+ const {c,props,sent}=context();props.set('RECEIPT_WEBHOOK_SECRET','test');c.familyRememberUserMessage_=()=>{};
+ c.sharedGemini_=()=>JSON.stringify({isReceipt:true,currency:'VND',amount:85000,category:'Đi chợ',description:'Shop'});
+ vm.runInContext(fs.readFileSync(__dirname+'/../FamilyRouter.gs','utf8'),c);
+ c.handleFamilyMessage_({chat:{id:'-100'},from:{id:7},message_id:4,photo:[{file_id:'test'}]});
+ assert.equal(sent.length,1);assert.match(sent[0].text,/ĐÃ ĐỌC BILL/);
+});

@@ -1,5 +1,14 @@
 # POORMAN TELEBOT — CONTEXT / HANDOFF (2026-10-08)
 
+## Active configuration verified — 2026-10-11 (read this first)
+
+- User explicitly confirmed @PoormanTest0219_bot is the active group bot. Use this branch’s experiments/gas-webhook source and GAS 1giuG5A8SrOsSwhcDC9Q_UTFxQGAr_TA73ukR8Tvq4cvOvYMuAv4wJUAO for bot changes. Root/main GAS uses retired @Botnhangheo_bot; do not bootstrap it.
+- Live new-bot health: active YES, group member administrator, receives group photos, Gemini key present, report trigger count 1, webhook URL matches, pending 0, allowed_updates message + callback_query.
+- Receipt scan deployed and installed with a query secret held only in GAS/Telegram. Keep HtmlService doPost response and secret validation; use getWebAppUrl() whenever setting webhook. Never log the webhook’s query key.
+- Send photo/document to scan, or Reply an own photo with /scan@PoormanTest0219_bot. Gemini creates a temporary VND expense draft; only its owner can confirm, cancel or edit. No ledger write before confirmation. No real bill has been scanned/confirmed by the assistant; mocked flow and runtime wiring are verified.
+- Old polling mistakenly revived during diagnosis has been stopped; verified old pollTriggers=0. Old GAS still provides Homepage’s signed Gemini chat bridge and expenses stats; preserve those HTTP actions.
+- The sections below are historical migration notes. Current main deploy only runs via manual dispatch or [deploy-gemini] marker and never bootstraps polling automatically.
+
 > **Current decision (user approved):** Promote the **isolated webhook GAS + test Telegram bot** to the new family expense bot. Reuse the **existing Google Sheets** (no data migration). **Only after new bot is fully tested and confirmed working**, disable the old polling bot. Do not replace the old GAS deployment. Preserve it for rollback.
 
 ## Architecture and identifiers

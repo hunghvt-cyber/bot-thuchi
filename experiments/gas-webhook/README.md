@@ -1,4 +1,9 @@
-# Poorman Telebot — new webhook GAS (staged)
+# Poorman Telebot — active group webhook
+
+Active bot: **@PoormanTest0219_bot**. This folder on `experiment/gas-webhook-isolated` is its source; root/main GAS belongs to the retired polling bot. Read the latest verification at the top of [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).
+
+Scan a bill by sending its photo, or Reply your photo with `/scan@PoormanTest0219_bot`. Check the temporary draft before pressing **Ghi chi tiêu**. Reply the draft with `sửa tiền 85k` to correct the total.
+
 
 **Read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) first.** This folder is the candidate replacement for the old polling GAS. It uses a different Telegram bot and GAS deployment but the **same existing family Google Sheets**. Old polling is NOT disabled by code deployment.
 
@@ -34,3 +39,4 @@
 - Ledger dedupe is atomic using ScriptLock, but webhook error responses may be acknowledged despite business failure; monitor diagnostics and reconcile errors manually.
 - Full family workflow and shared-sheet write tests **remain pending** until the new GAS is deployed and configured.
 - The GitHub `main` workflow automatically redeploys and reboots the OLD polling bot on push; do not casually merge this branch into main.
+
