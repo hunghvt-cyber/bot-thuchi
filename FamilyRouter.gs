@@ -1,11 +1,14 @@
 function isFamilyGroupAllowed_(chatId){var x=familyGroupId_();return !x||String(x)===String(chatId);}
-function handleFamilyMessage_(msg){
-  var chatId=msg.chat.id,text=String(msg.text||'').trim();if(!text)return true;
+function handleFamilyMessage_(msg,alreadyLocked){
+  var chatId=msg.chat.id,text=String(msg.text||'').trim();
   if(!isFamilyGroupAllowed_(chatId)){
     if(text.charAt(0)==='/'||/^\s*(xóa|xoá|khôi phục|sửa\s)/i.test(text))sendText(chatId,'Bot đang khóa với một nhóm Telegram khác. Dùng /whoami trong nhóm đã đăng ký hoặc kiểm tra FAMILY_GROUP_ID trong Apps Script.');
     return true;
   }
   try{familyRememberUserMessage_(msg);}catch(trackError){Logger.log('User message tracking: '+trackError);}
+  if(alreadyLocked&&handleReceiptPhoto_(msg,true))return true;
+  if(!text)return true;
+  if(alreadyLocked&&receiptEditDraft_(msg,text))return true;
   var cmd=text.split(/\s+/)[0].split('@')[0].toLowerCase();
   if(cmd==='/start'||cmd==='/help'){
     sendText(chatId,
@@ -14,6 +17,7 @@ function handleFamilyMessage_(msg){
       '• <code>mì tôm 10k</code>\n'+
       '• <code>đi chợ 630</code> (630.000đ)\n'+
       '• <code>học phí 2tr5</code> (2.500.000đ)\n\n'+
+      'Gửi ảnh bill: bot đọc tổng tiền, bấm Ghi chi tiêu sau khi kiểm tra.\n\n'+
       '<b>2. Báo cáo</b>\n'+
       '• /baocaongay — hôm nay\n'+
       '• /baocaotuan — tuần này\n'+
@@ -57,7 +61,7 @@ function handleFamilyMessage_(msg){
   }catch(e){Logger.log(e.stack||e);sendText(chatId,'Không xử lý được. Thử: <code>đi chợ 450k</code>');return true;}
 }
 function doPost(e){
-  try{var u=JSON.parse(e.postData.contents);if(u.action==='homepage_stats')return homepageStats_(u);if(u.message)handleFamilyMessage_(u.message);if(u.callback_query)familyResetCallback_(u.callback_query);return ContentService.createTextOutput('ok');}
+  try{var u=JSON.parse(e.postData.contents);if(u.action==='homepage_stats')return homepageStats_(u);if(u.action==='homepage_chat')return homepageChat_(u);if(u.message)handleFamilyMessage_(u.message);if(u.callback_query)familyResetCallback_(u.callback_query);return ContentService.createTextOutput('ok');}
   catch(err){Logger.log(err.stack||err);try{var msg=u&&u.message;if(msg&&msg.chat&&msg.chat.id)sendText(msg.chat.id,'Lỗi xử lý: '+escapeHtml_(String(err.message||err).slice(0,180)));}catch(ignore){}return ContentService.createTextOutput('error');}
 }
 
@@ -77,3 +81,4 @@ function doGet(e){
     return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err.message||err)})).setMimeType(ContentService.MimeType.JSON);
   }
 }
+

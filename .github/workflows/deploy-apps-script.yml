@@ -1,7 +1,9 @@
 name: Deploy Apps Script
 on:
-  # Legacy polling GAS is frozen during webhook migration.
-  # Do not auto-deploy or re-create polling on main pushes.
+  # Production uses the existing polling trigger; deploy code without bootstrap.
+  push:
+    branches: [main]
+    paths: ["*.gs", "appsscript.json", "tests/**", ".github/workflows/deploy-apps-script.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,6 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test-and-deploy:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-gemini]')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -21,6 +24,8 @@ jobs:
           node-version: 24
       - name: Test money parser
         run: node tests/test-money-parser.js
+      - name: Test reporting and Gemini features
+        run: node --test tests/*.test.js
       - name: Restore clasp credentials
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
@@ -36,3 +41,4 @@ jobs:
       - name: Redeploy Web App
         run: npx --yes @google/clasp@3.4.1 update-deployment "AKfycbyaTgOIeeNkUEUoqsQcEaI_LPSFh8V4Rf28gxXppiTWCpxM8Eirm-wsQH_JMV9kmXyh" --description "GitHub ${GITHUB_SHA}"
       # Legacy bootstrap deliberately disabled: it re-creates the polling trigger.
+

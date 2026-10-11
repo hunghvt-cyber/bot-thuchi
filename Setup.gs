@@ -27,8 +27,8 @@ function pollFamilyTelegram_(){
     for(var i=0;i<updates.length;i++){
       var update=updates[i];
       try{
-        if(update.message)handleFamilyMessage_(update.message);
-        if(update.callback_query)familyResetCallback_(update.callback_query);
+        if(update.message)handleFamilyMessage_(update.message,true);
+        if(update.callback_query&&!receiptCallback_(update.callback_query,true))familyResetCallback_(update.callback_query);
       }catch(err){
         props.setProperty('POLL_LAST_ERROR',String(err.message||err).slice(0,250));
         Logger.log('Telegram update '+update.update_id+': '+(err.stack||err));
@@ -99,3 +99,4 @@ function sendFamilyDailyReportIfDue_(){
   props.setProperty('DAILY_REPORT_SENT_DATE',date);
   props.deleteProperty('DAILY_REPORT_LAST_ERROR');
 }
+

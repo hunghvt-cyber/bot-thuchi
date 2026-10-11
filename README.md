@@ -73,3 +73,8 @@ API `homepage_stats` đọc toàn bộ giao dịch trong Google Sheets theo thá
 
 Khóa không nằm trong repo, HTML, chat hoặc log. Request từ Homepage được ký HMAC SHA-256 và có thời hạn 60 giây. Endpoint không đọc dữ liệu khi xác thực sai. Kiểm tra: `node tests/test-money-parser.js` và `node --test tests/homepage-stats.test.js`.
 
+
+
+## Scan bill và chat Homepage
+
+Gửi ảnh bill vào nhóm, kiểm tra tổng rồi bấm **Ghi chi tiêu**. Reply bản nháp `sửa tiền 85k` nếu cần. Một bill ghi một khoản tổng vào hôm nay, chỉ người gửi được xác nhận. [Cấu hình, giới hạn và triển khai](docs/GEMINI-RECEIPT-20261011.md). Khóa/model Gemini hiện có được dùng lại; không bật billing. Workflow chỉ deploy khi dispatch hoặc commit có `[deploy-gemini]`.
