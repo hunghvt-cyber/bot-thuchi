@@ -1,7 +1,7 @@
 // Existing Script Properties key/model; no CLI, NAS, paid fallback, or automatic retries.
 function sharedGemini_(contents,jsonOutput) {
   var key=getGeminiApiKey();
-  if(!key)throw new Error('Chưa cấu hình Gemini.');
+  if(!key){var missing=new Error('Chưa cấu hình Gemini.');missing.reason='CONFIG';throw missing;}
   var model=getGeminiModel();
   if(!/^[a-zA-Z0-9._-]+$/.test(model))throw new Error('Model Gemini không hợp lệ.');
   var config={maxOutputTokens:2048};
@@ -13,10 +13,10 @@ function sharedGemini_(contents,jsonOutput) {
   });}catch(e){throw new Error('Không kết nối được Gemini. Thử lại sau.');}
   var code=response.getResponseCode();
   if(code===429){var limited=new Error('Đã hết hạn mức Gemini hoặc đang quá tải. Thử lại sau.');limited.code=429;throw limited;}
-  if(code<200||code>=300)throw new Error('Gemini chưa phản hồi. Kiểm tra model hoặc thử lại sau.');
+  if(code<200||code>=300){var failed=new Error('Gemini chưa phản hồi.');failed.reason='HTTP';failed.upstreamStatus=code;throw failed;}
   var result;try{result=JSON.parse(response.getContentText());}catch(e){throw new Error('Câu trả lời Gemini không hợp lệ.');}
   var candidate=result.candidates&&result.candidates[0];
-  if(!candidate || candidate.finishReason!=='STOP')throw new Error('Gemini chưa trả lời đầy đủ. Thử ảnh rõ hơn hoặc câu hỏi ngắn hơn.');
+  if(!candidate || candidate.finishReason!=='STOP'){var incomplete=new Error('Gemini chưa trả lời đầy đủ.');incomplete.reason='INCOMPLETE';throw incomplete;}
   var parts=candidate.content&&candidate.content.parts||[];
   var text=parts.filter(function(p){return typeof p.text==='string'&&!p.thought;}).map(function(p){return p.text;}).join('');
   if(!text.trim()||text.length>16000)throw new Error('Câu trả lời Gemini trống hoặc quá dài.');
@@ -55,5 +55,5 @@ function homepageChat_(envelope) {
     if(total>24000)return output({ok:false});
     sharedGeminiQuota_('CHAT',30);
     return output({ok:true,text:sharedGemini_(contents,false)});
-  }catch(e){return output({ok:false,code:e.code===429?429:502});}
+  }catch(e){return output({ok:false,code:e.code===429?429:502,reason:['CONFIG','HTTP','INCOMPLETE'].indexOf(e.reason)>=0?e.reason:'UNKNOWN',upstreamStatus:Number(e.upstreamStatus)||null,model:getGeminiModel()});}
 }
