@@ -1,5 +1,15 @@
 # Poorman Telebot — Family Expense Bot
 
+> [!IMPORTANT]
+> **TRẠNG THÁI HIỆN TẠI — 2026-10-16:** Bot chi tiêu gia đình đang dùng **@PoormanTest0219_bot** qua Telegram webhook, **KHÔNG phải** bot polling trong mã nguồn gốc của nhánh `main`.
+>
+> **Nguồn sự thật để phát triển bot:** nhánh [`experiment/gas-webhook-isolated`](https://github.com/hunghvt-cyber/poorman-telebot/tree/experiment/gas-webhook-isolated), thư mục [`experiments/gas-webhook/`](https://github.com/hunghvt-cyber/poorman-telebot/tree/experiment/gas-webhook-isolated/experiments/gas-webhook), đặc biệt [`PROJECT_CONTEXT.md`](https://github.com/hunghvt-cyber/poorman-telebot/blob/experiment/gas-webhook-isolated/experiments/gas-webhook/PROJECT_CONTEXT.md).
+>
+> **ĐỪNG** sửa root `FamilyLedger.gs` / `FamilyRouter.gs` trên `main` để thay đổi bot đang hoạt động. **ĐỪNG** chạy `setupFamilyBot()`, bật lại `pollFamilyTelegram_`, hoặc gộp toàn bộ nhánh webhook vào `main` mà không có kế hoạch chuyển đổi. GAS cũ vẫn được giữ cho các endpoint Homepage và phương án dự phòng. Các phần dưới đây chủ yếu mô tả kiến trúc **legacy**.
+>
+> Quy trình cập nhật bot hiện tại: sửa mã ở `experiment/gas-webhook-isolated:experiments/gas-webhook/` → workflow `deploy-gas-webhook-test.yml` chạy khi push vào thư mục này → triển khai tới GAS webhook riêng. **Deploy mã không đồng nghĩa chạy hàm GAS một lần**. Thay đổi dữ liệu Google Sheets phải được thực thi và xác nhận riêng.
+
+
 Bot ghi chi tiêu gia đình trong Telegram group. Backend chạy miễn phí bằng Google Apps Script, dữ liệu ở Google Sheets, Gemini chỉ dùng khi parser local không hiểu.
 
 Based on [nmloc/ledger-bot-telegram](https://github.com/nmloc/ledger-bot-telegram) (MIT).
