@@ -1,3 +1,41 @@
+# CURRENT OPERATING HANDOFF — 2026-10-16
+
+> **READ THIS SECTION FIRST.** Older sections below are a chronological engineering journal, not current operational instructions. In particular, claims that the new webhook is still a candidate, that the old polling bot is live, or that the main workflow auto-bootstraps polling are superseded.
+
+## Source of truth and deployment
+
+- **Active family bot:** Telegram `@PoormanTest0219_bot`, direct webhook to isolated GAS. The old root/main polling bot `@Botnhangheo_bot` is retired for family expense intake.
+- **Edit code here:** GitHub branch `experiment/gas-webhook-isolated`, folder `experiments/gas-webhook/`. The root files on `main` are legacy and **do not** implement changes to the active family bot.
+- **Active GAS editor:** https://script.google.com/home/projects/1giuG5A8SrOsSwhcDC9Q_UTFxQGAr_TA73ukR8Tvq4cvOvYMuAv4wJUAO/edit
+- **Webhook deployment:** `AKfycby9V-wbbucC9zTBRfMdCM5Tf8qsJRlMVeQtOfyKmrtuOVmLs1USBcTTMbe4J2ExhpQn`.
+- **Deployment workflow:** `.github/workflows/deploy-gas-webhook-test.yml`; push changes under `experiments/gas-webhook/**` on the isolated branch to run tests, clasp push and update deployment. Verify GitHub Actions success before treating code as deployed. It does **not** execute migration/maintenance functions.
+- **Legacy GAS:** `1sYaIFrLfzoj18ZbcXDwAEjuXBi-Y7iNPLZX2MqeFP2PV8I2SfFfLLFxt`. Its polling trigger was removed; keep its Homepage signed chat/stats endpoints intact. Do not run `setupFamilyBot()`, bootstrap old polling, or enable both bots as ledger writers.
+- **Storage:** Both versions use the same existing Google Sheets `Transactions`; no data migration to a different spreadsheet. Secrets remain in GAS Script Properties, never in GitHub.
+- **Timezone:** `Asia/Ho_Chi_Minh`. Scheduled daily summary is around 21:00 Vietnam time (GAS trigger timing is approximate), showing daily spend, monthly total and daily average, without member breakdown.
+
+## Verified recent user-facing behavior and data maintenance
+
+- Natural-language group expense messages are parsed locally when possible, Gemini as fallback. Confirmation was updated to include **total family expense for today** after the transaction, across members, excluding deleted and income rows. Check the current implementation and deployed workflow before promising exact runtime behavior.
+- `Vay mượn` is a category. Interest, loan repayment and borrowing-related phrases are routed there by local parser; Gemini category choices include it. These were updated in `FamilyConfig.gs` and `FamilyLedger.gs` on this branch.
+- The user confirmed that **two historical transactions** were reclassified from `Khác` to `Vay mượn` in the existing Sheets: **3,550,000 VND** (`3550k lãi vay NOXH`) and **2,400,000 VND** (Nam Á card interest), total **5,950,000 VND**. This was a **category-only** change, not a new expense or an amount adjustment. User confirmation is the evidence; assistant cannot directly execute GAS from the GitHub connector.
+- One-time migration function `migrateTwoInterestPayments()` exists in `FamilyLedger.gs`. It matches each known expense by amount and description, checks uniqueness, and skips already-reclassified rows. **Do not rerun migrations as part of normal deployment**.
+- New group-binding issue observed: earlier configured `FAMILY_GROUP_ID=-5534672148`, later webhook log showed `chat_id=-1003940444420`. The user was instructed to update `FAMILY_GROUP_ID` in the new GAS Script Properties. **The actual current Script Property value has not been independently read here**; do not assume either ID is still current. The ledger and reports must preserve historical rows across group-ID changes.
+- The new webhook logs metadata to `WebhookLogs` via `showRecentWebhookLogs()` and keeps transaction diagnostics. Avoid storing sensitive message text or secrets in diagnostic logs.
+- Receipt scanning exists in the active webhook source: photo/document scan → temporary draft → owner confirmation/edit/cancel → one ledger write. Read receipt-specific notes below; do not claim every live path is tested without evidence.
+- Old polling trigger removal, new webhook activation, and user confirmation of transaction-category migration supersede the earlier migration TODOs below.
+
+## Rules for another AI / maintainer
+
+1. **Start with this file and the actual source on the isolated branch.** Do not infer active behavior from the `main` README or root `*.gs` files.
+2. For active bot changes, edit `experiments/gas-webhook/` on `experiment/gas-webhook-isolated`; inspect its tests and deploy workflow. Do not alter legacy GAS or Homepage endpoints without a separate explicit request.
+3. Prefer free, stable, simple Google Apps Script + Telegram + Sheets. Parser local first, Gemini fallback; do not add paid infrastructure or unnecessary external dependencies.
+4. Preserve data and audit history: no blanket resets, no double writes, no deleting old-group transactions. Protect Telegram webhook secret, tokens, spreadsheet IDs, and other credentials.
+5. Distinguish **committed**, **deployed**, **executed**, and **verified**. GitHub push and clasp deploy do not run a named GAS function; never claim Sheets were modified unless execution/user confirmation supports it.
+6. The user primarily works from mobile/iPad and prefers direct GitHub changes by the assistant, with only unavoidable GAS actions delegated to the user.
+7. Update this handoff and the `main` README pointer whenever the active branch/architecture changes. Do not merge webhook code into `main` just to make documentation easier to find.
+
+---
+
 # POORMAN TELEBOT — CONTEXT / HANDOFF (2026-10-08)
 
 ## Active configuration verified — 2026-10-11 (read this first)
