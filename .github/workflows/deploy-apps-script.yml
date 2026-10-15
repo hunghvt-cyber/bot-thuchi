@@ -1,9 +1,6 @@
-name: Deploy Apps Script
+name: Deploy legacy GAS Homepage endpoints (manual only)
 on:
-  # Production uses the existing polling trigger; deploy code without bootstrap.
-  push:
-    branches: [main]
-    paths: ["*.gs", "appsscript.json", ".claspignore", "tests/**", ".github/workflows/deploy-apps-script.yml"]
+  # LEGACY GAS: Homepage stats/chat endpoints only. Active family bot deploys from experiment/gas-webhook-isolated.
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test-and-deploy:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-gemini]')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -40,5 +37,5 @@ jobs:
         run: npx --yes @google/clasp@3.4.1 push --force
       - name: Redeploy Web App
         run: npx --yes @google/clasp@3.4.1 update-deployment "AKfycbyaTgOIeeNkUEUoqsQcEaI_LPSFh8V4Rf28gxXppiTWCpxM8Eirm-wsQH_JMV9kmXyh" --description "GitHub ${GITHUB_SHA}"
-      # Legacy bootstrap deliberately disabled: it re-creates the polling trigger.
+      # No bootstrap, polling trigger or Telegram webhook mutation. Manual deployment only.
 
