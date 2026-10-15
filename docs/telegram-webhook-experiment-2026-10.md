@@ -1,5 +1,8 @@
 # Quyết định kỹ thuật: Telegram webhook trực tiếp tới Apps Script
 
+> **ĐÍNH CHÍNH 16/10/2026:** Đây là kết quả của bot/deployment thử nghiệm cũ, không phải kết luận về bot hiện hành `@PoormanTest0219_bot`. Theo hồ sơ bàn giao và xác nhận người vận hành, bot hiện tại sử dụng webhook `doPost(e)`, bot polling cũ đã ngừng. Không dùng tài liệu này để khôi phục polling hoặc thay đổi webhook production; cần đối chiếu runtime trước khi thao tác.
+
+
 Trạng thái: **Đóng thử nghiệm ngày 2026-10-08. Không lặp lại phép thử này nếu không có bằng chứng kỹ thuật mới.**
 
 ## Kết luận vận hành
