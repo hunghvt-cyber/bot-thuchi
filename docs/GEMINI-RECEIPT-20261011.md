@@ -1,5 +1,8 @@
 # Gemini chat và scan bill
 
+> **ĐÍNH CHÍNH 16/10/2026 — KHÔNG DÙNG PHẦN POLLING LÀM RUNBOOK:** Người vận hành xác nhận `@PoormanTest0219_bot` là bot hiện hành, sử dụng webhook Telegram qua Apps Script `doPost(e)`; bot polling cũ đã ngừng. Các đoạn dưới đây nhắc đến polling, khôi phục trigger và `setupFamilyBot()` phản ánh lần cấu hình nhầm ngày 11/10, chỉ giữ để truy vết lịch sử. Không chạy lại các bước đó trên production. URL webhook/deployment của bot hiện hành chưa được đối chiếu trực tiếp qua `getWebhookInfo`; phải xác minh trước mọi thay đổi.
+
+
 Dùng lại `GEMINI_API_KEY`; tính năng mới dùng `GEMINI_SHARED_MODEL` (mặc định `gemini-3.5-flash-lite`, có Free Tier theo Google) trong Script Properties, không Gemini CLI, không NAS, không tạo khóa mới hoặc bật billing.
 
 ## Scan bill
@@ -10,7 +13,7 @@ Bot tạo bản nháp gồm tổng tiền, danh mục, mô tả và ngày đọc
 
 Một bill ghi một giao dịch tổng, không tách từng món. Ngày chi tiêu là hôm nay khi xác nhận, giữ cách ghi hiện tại; ngày trên bill chỉ là thông tin để kiểm tra. Bill cùng message ID không ghi hai lần kể cả bấm xác nhận lặp; gửi lại cùng ảnh thành message khác là một yêu cầu mới. Tin xác nhận có mã và liên kết reply để sửa/xóa như trước.
 
-Receipt chỉ nhận từ polling Telegram đã xác thực bằng bot token. Endpoint `doPost` không nhận receipt callback; không tạo webhook hoặc trigger. Giữ khóa polling trong suốt xử lý, quota helper không tự giải phóng khóa của caller. Tối đa 20 lần gọi scan/ngày, 30 lần gọi chat/ngày; không tự retry/fallback model.
+**Ghi chú lịch sử không còn hiệu lực:** Bản tài liệu cũ mô tả receipt nhận qua polling và `doPost` không nhận callback. Mô tả này thuộc lần cấu hình nhầm; cần kiểm tra source/deployment của `@PoormanTest0219_bot` trước khi xác nhận luồng receipt thực tế. Không tự tạo webhook hoặc trigger. Giữ khóa polling trong suốt xử lý, quota helper không tự giải phóng khóa của caller. Tối đa 20 lần gọi scan/ngày, 30 lần gọi chat/ngày; không tự retry/fallback model.
 
 ## Homepage chat
 
