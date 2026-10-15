@@ -32,7 +32,10 @@ Based on [nmloc/ledger-bot-telegram](https://github.com/nmloc/ledger-bot-telegra
 - `/today`: chi hôm nay; `/month`: chi tháng này; `/mine`: riêng người gửi; `/whoami`: lấy User/Group ID.
 - Gmail/MacroDroid bank ingestion giữ cho V2.
 
-## Cài đặt
+## Cài đặt bot polling cũ — LƯU TRỮ, KHÔNG THỰC HIỆN
+
+> Các bước bên dưới chỉ để tham khảo lịch sử. Bot hiện hành phải theo `experiment/gas-webhook-isolated/experiments/gas-webhook/PROJECT_CONTEXT.md`.
+
 
 1. Tạo Telegram bot bằng BotFather. Trong BotFather, tắt Privacy Mode cho bot nếu muốn bot đọc các tin nhắn thường trong group.
 2. Tạo một Google Sheet trống và lấy Spreadsheet ID từ URL.
@@ -45,7 +48,7 @@ Based on [nmloc/ledger-bot-telegram](https://github.com/nmloc/ledger-bot-telegra
    - `GEMINI_MODEL` (optional, mặc định `gemini-2.5-flash`)
 6. Deploy → New deployment → Web app. Execute as: Me. Who has access: Anyone.
 7. Copy URL `/exec`, thêm Script Property `WEB_APP_URL`.
-8. Chạy hàm `setupFamilyBot()` một lần và cấp quyền.
+8. **KHÔNG CHẠY TRÊN BOT HIỆN HÀNH:** `setupFamilyBot()` là bootstrap của bot polling cũ, có thao tác `deleteWebhook`.
 9. Thêm bot vào private group, gửi `/whoami`. Sau đó nên đặt `FAMILY_GROUP_ID` bằng Group ID nhận được để khóa bot vào đúng group.
 
 ## Test
@@ -70,14 +73,14 @@ V1: Telegram family ledger. V2: Gmail bank alerts + MacroDroid webhook, dedupe n
 
 ## Ghi chú kỹ thuật về Telegram webhook
 
-Thử nghiệm webhook trực tiếp tới Google Apps Script đã đóng; bot chính tiếp tục dùng polling. Xem [kết quả thử nghiệm và lý do không thử lại](docs/telegram-webhook-experiment-2026-10.md).
+Thử nghiệm webhook **cũ** đã đóng; kết luận đó không áp dụng cho bot webhook đang dùng. Xem [nhật ký lịch sử](docs/telegram-webhook-experiment-2026-10.md) và [hồ sơ bàn giao hiện hành](https://github.com/hunghvt-cyber/poorman-telebot/blob/experiment/gas-webhook-isolated/experiments/gas-webhook/PROJECT_CONTEXT.md).
 
 ## Xóa mềm giao dịch thử nghiệm và tra mã
 
 - Quản trị viên nhóm gửi `/resettests`. Bot hiển thị nút **Xác nhận xóa mềm** / **Hủy**; chỉ người đã yêu cầu được bấm xác nhận, trong 5 phút. Không cần gõ `/resettests XACNHAN` nữa.
 - Bot đánh dấu `DELETED` cho các giao dịch của nhóm đã tồn tại tại thời điểm yêu cầu, ghi `AuditLog`, không xóa hàng trong Sheets. Giao dịch mới phát sinh sau khi yêu cầu không bị ảnh hưởng.
 - Mã giao dịch dạng `#xxxxxxxx` xuất hiện trong tin xác nhận ghi chi tiêu và lệnh `/giaodich`. Dùng `/xoa #mã`, `/khoiphuc #mã`, `/suatien #mã 15k` để thao tác.
-- Bot dùng polling, cần nhận cả Telegram `message` và `callback_query`. Sau khi triển khai phiên bản mới, polling sẽ nhận nút xác nhận ở lượt quét kế tiếp (thường trong 1 phút).
+- **Chỉ thuộc bot cũ:** cơ chế polling nhận `message` và `callback_query`. Bot hiện hành nhận các cập nhật qua webhook riêng.
 
 ## Báo cáo trên Homepage
 
