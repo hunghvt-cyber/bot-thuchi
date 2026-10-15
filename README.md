@@ -14,6 +14,13 @@ Bot ghi chi tiêu gia đình trong Telegram group. Backend chạy miễn phí b�
 
 Based on [nmloc/ledger-bot-telegram](https://github.com/nmloc/ledger-bot-telegram) (MIT).
 
+## Lưu ý vận hành bot hiện tại (16/10/2026)
+
+- Người vận hành xác nhận bot đang sử dụng là `@PoormanTest0219_bot`, theo cơ chế Telegram webhook / Apps Script `doPost(e)`. Bot polling cũ đã bỏ.
+- Mã nguồn vẫn có `pollFamilyTelegram_()` và `setupFamilyBot()` của hệ thống cũ. **Không chạy `setupFamilyBot()`, `setWebhook()`, `deleteWebhook()` hoặc tạo lại polling trigger** khi chưa xác minh đúng bot và deployment.
+- Các ghi chú polling trong README, workflow và tài liệu quét hóa đơn 11/10 là lịch sử cấu hình cũ, **không phải bằng chứng trạng thái production hiện tại**.
+- Chưa đối chiếu độc lập `getWebhookInfo` với Apps Script deployment hiện tại. Trước khi sửa bot, xác minh bot username, URL webhook, Apps Script project/deployment và group đích; không thay đổi production chỉ dựa vào tài liệu.
+
 ## V1
 
 - Group Telegram dùng chung cho gia đình.
