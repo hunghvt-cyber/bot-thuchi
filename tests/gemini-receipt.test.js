@@ -11,7 +11,7 @@ function context(){
  return {c,props,cache,sent,calls,rows,releases:()=>releases};
 }
 test('signed chat rejects tampering and oversized/out-of-order turns before Gemini',()=>{
- const {c,props}=context();props.set('HOMEPAGE_STATS_SECRET','x'.repeat(32));let called=0;c.sharedGemini_=()=>{called++;return 'ok';};
+ const {c,props}=context();props.set('HOMEPAGE_STATS_SECRET','x'.repeat(32));let called=0;c.sharedGeminiResult_=()=>{called++;return {text:'ok',requestedModel:'gemini-test',modelVersion:'gemini-test-001'};};
  function request(messages,action='homepage_chat'){const payload=JSON.stringify({action,messages,timestamp:Date.now()});return {payload,signature:crypto.createHmac('sha256','x'.repeat(32)).update(payload).digest('hex')};}
  const envelope=request([{role:'user',text:'x'}]);assert.equal(JSON.parse(c.homepageChat_(envelope).text).ok,true);
  envelope.payload+=' ';assert.equal(JSON.parse(c.homepageChat_(envelope).text).ok,false);
@@ -58,3 +58,4 @@ test('/scan gives guidance without an image and rejects another person’s bill'
  msg.reply_to_message={from:{id:8},photo:[{file_id:'test'}]};c.receiptScanCommand_(msg,'/scan');assert.equal(scans,0);assert.equal(rows.length,0);
  assert.equal(c.receiptScanCommand_(msg,'ok'),false);
 });
+
