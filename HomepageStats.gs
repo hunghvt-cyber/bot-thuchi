@@ -18,7 +18,7 @@ function homepageStats_(envelope) {
       var r=data[i],day=homepageLedgerDay_(r[1],spreadsheet.getSpreadsheetTimeZone()),amount=Number(r[7]);
       if(!day || String(r[15])==='DELETED' || !isFinite(amount) || amount<0 || ['ChiTieu','ThuNhap'].indexOf(r[4])<0)continue;
       if(day.slice(0,7)!==request.month)continue;
-      transactions.push({day:day,amount:amount,type:String(r[4]),category:String(r[5]||'Khác'),payerId:String(r[2]),payer:String(r[3])});
+      transactions.push({day:day,amount:amount,type:String(r[4]),category:String(r[5]||'Khác'),payerId:String(r[2]),payer:String(r[3]),description:String(r[6]==null?'':r[6]).slice(0,2000)});
     }
     return result({ok:true,month:request.month,measuredAt:new Date().toISOString(),transactions:transactions});
   }catch(e){return result({ok:false});}
