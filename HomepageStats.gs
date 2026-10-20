@@ -13,9 +13,10 @@ function homepageStats_(envelope) {
     // Reporting must never create a sheet or initialize ledger headers.
     var spreadsheet=familySpreadsheet_(),sheet=spreadsheet.getSheetByName('Transactions');
     if(!sheet)return result({ok:false});
-    var data=sheet.getDataRange().getValues(),transactions=[];
+    // Native date-only cells must keep their displayed calendar day across GAS/Sheet timezones.
+    var range=sheet.getDataRange(),data=range.getValues(),display=range.getDisplayValues(),transactions=[];
     for(var i=1;i<data.length;i++) {
-      var r=data[i],day=homepageLedgerDay_(r[1],spreadsheet.getSpreadsheetTimeZone()),amount=Number(r[7]);
+      var r=data[i],day=homepageLedgerDay_(Object.prototype.toString.call(r[1])==='[object Date]'?display[i][1]:r[1],spreadsheet.getSpreadsheetTimeZone()),amount=Number(r[7]);
       if(!day || String(r[15])==='DELETED' || !isFinite(amount) || amount<0 || ['ChiTieu','ThuNhap'].indexOf(r[4])<0)continue;
       if(day.slice(0,7)!==request.month)continue;
       transactions.push({day:day,amount:amount,type:String(r[4]),category:String(r[5]||'Khác'),payerId:String(r[2]),payer:String(r[3]),description:String(r[6]==null?'':r[6]).slice(0,2000)});
@@ -31,8 +32,8 @@ function homepageLedgerDay_(value,timeZone) {
     if(isNaN(value.getTime()))return '';
     day=Utilities.formatDate(value,timeZone,'yyyy-MM-dd');
   }else {
-    var text=String(value==null?'':value).trim(),m=text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    day=m?m[3]+'-'+m[2]+'-'+m[1]:text;
+    var text=String(value==null?'':value).trim(),m=text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    day=m?m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2):text;
   }
   if(!/^20\d{2}-\d{2}-\d{2}$/.test(day))return '';
   var d=new Date(day+'T00:00:00Z');
