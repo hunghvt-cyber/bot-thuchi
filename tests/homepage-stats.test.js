@@ -2,8 +2,8 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),vm=requir
 function fixture() {
  const secret='test-only-secret-at-least-32-characters';let reads=0;
  const row=(day,amount,status='',group='old')=>{const r=[];r[0]=new Date('2026-09-01T00:00:00Z');r[1]=day;r[2]='1';r[3]='A';r[4]='ChiTieu';r[5]='Khác';r[6]='Ăn trưa <b>gia đình</b>';r[14]='raw Telegram hidden';r[7]=amount;r[9]=group;r[15]=status;return r;};
- const rows=[[],row('09/10/2026',2400000,'','new'),row(new Date('2026-10-10T00:00:00Z'),3550000,'','new'),row('2026-10-10',500000),row('08/10/2026',40000),row('10/10/2026',10000,'DELETED'),row('31/09/2026',999),row('',999),row('01/11/2026',999)];
- const ctx={PropertiesService:{getScriptProperties:()=>({getProperty:()=>secret})},ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({text,setMimeType(){return this;}})},Utilities:{Charset:{UTF_8:'utf8'},computeHmacSha256Signature:(p,s)=>[...crypto.createHmac('sha256',s).update(p).digest()],formatDate:(d,tz)=>{const p=new Intl.DateTimeFormat('en-GB',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);const v=t=>p.find(x=>x.type===t).value;return v('year')+'-'+v('month')+'-'+v('day');}},familySpreadsheet_:()=>{reads++;return {getSpreadsheetTimeZone:()=> 'Etc/GMT',getSheetByName:name=>{assert.equal(name,'Transactions');return {getDataRange:()=>({getValues:()=>rows})};}};}};
+ const rows=[[],row('09/10/2026',2400000,'','new'),row(new Date('2026-10-09T17:00:00Z'),3550000,'','new'),row('2026-10-10',500000),row('08/10/2026',40000),row('10/10/2026',10000,'DELETED'),row('31/09/2026',999),row('',999),row('01/11/2026',999)];
+ const ctx={PropertiesService:{getScriptProperties:()=>({getProperty:()=>secret})},ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({text,setMimeType(){return this;}})},Utilities:{Charset:{UTF_8:'utf8'},computeHmacSha256Signature:(p,s)=>[...crypto.createHmac('sha256',s).update(p).digest()],formatDate:(d,tz)=>{const p=new Intl.DateTimeFormat('en-GB',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);const v=t=>p.find(x=>x.type===t).value;return v('year')+'-'+v('month')+'-'+v('day');}},familySpreadsheet_:()=>{reads++;return {getSpreadsheetTimeZone:()=> 'Etc/GMT',getSheetByName:name=>{assert.equal(name,'Transactions');return {getDataRange:()=>({getValues:()=>rows,getDisplayValues:()=>rows.map(r=>r.map(v=>Object.prototype.toString.call(v)==='[object Date]'?'10/10/2026':String(v)))})};}};}};
  vm.createContext(ctx);vm.runInContext(fs.readFileSync('HomepageStats.gs','utf8'),ctx);
  const sign=p=>crypto.createHmac('sha256',secret).update(p).digest('hex');
  const payload=JSON.stringify({month:'2026-10',timestamp:Date.now()});
@@ -25,4 +25,15 @@ test('missing sheet does not create or initialize ledger',()=>{
 });
 test('Date objects preserve spreadsheet calendar date including positive timezone',()=>{
  const f=fixture();assert.equal(f.ctx.homepageLedgerDay_(new Date('2026-10-09T17:00:00Z'),'Asia/Ho_Chi_Minh'),'2026-10-10');
+});
+
+test('midnight Vietnam date remains the displayed ledger day with GMT spreadsheet',()=>{
+ const {ctx,payload,sign}=fixture(),data=JSON.parse(ctx.homepageStats_({payload,signature:sign(payload)}).text);
+ assert.equal(data.transactions[1].day,'2026-10-10');
+});
+
+test('displayed dates accept unpadded days and reject impossible dates',()=>{
+ const f=fixture();assert.equal(f.ctx.homepageLedgerDay_('8/10/2026','Etc/GMT'),'2026-10-08');
+ assert.equal(f.ctx.homepageLedgerDay_('31/9/2026','Etc/GMT'),'');
+ assert.equal(f.ctx.homepageLedgerDay_('20/10/2026','Etc/GMT'),'2026-10-20');
 });
