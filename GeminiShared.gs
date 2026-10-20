@@ -69,7 +69,7 @@ function homepageChat_(envelope) {
   function output(v){return ContentService.createTextOutput(JSON.stringify(v)).setMimeType(ContentService.MimeType.JSON);}
   try{
     var secret=getScriptProp_('HOMEPAGE_STATS_SECRET');
-    if(!secret||secret.length<32||typeof envelope.payload!=='string'||envelope.payload.length>150000)return output({ok:false});
+    if(!secret||secret.length<32||typeof envelope.payload!=='string'||envelope.payload.length>1500000)return output({ok:false});
     var expected=Utilities.computeHmacSha256Signature(envelope.payload,secret,Utilities.Charset.UTF_8).map(function(b){return ('0'+((b+256)%256).toString(16)).slice(-2);}).join('');
     var received=String(envelope.signature||''),diff=expected.length^received.length;
     for(var i=0;i<expected.length;i++)diff|=expected.charCodeAt(i)^(received.charCodeAt(i)||0);
@@ -78,12 +78,12 @@ function homepageChat_(envelope) {
     if(request.action!=='homepage_chat'||typeof request.timestamp!=='number'||!isFinite(request.timestamp)||Math.abs(Date.now()-request.timestamp)>60000)return output({ok:false});
     if(request.operation==='models'){var catalog=homepageModels_(request.refresh===true);return output({ok:true,defaultModel:catalog.defaultModel,models:catalog.models});}
     if(request.operation&&request.operation!=='chat')return output({ok:false});
-    if(request.action!=='homepage_chat'||typeof request.timestamp!=='number'||!isFinite(request.timestamp)||Math.abs(Date.now()-request.timestamp)>60000||!Array.isArray(messages)||!messages.length||messages.length>19||messages.length%2!==1)return output({ok:false});
+    if(request.action!=='homepage_chat'||typeof request.timestamp!=='number'||!isFinite(request.timestamp)||Math.abs(Date.now()-request.timestamp)>60000||!Array.isArray(messages)||!messages.length||messages.length>39||messages.length%2!==1)return output({ok:false});
     var total=0,contents=messages.map(function(m,i){
-      if(!m||m.role!==(i%2?'model':'user')||typeof m.text!=='string'||!m.text.trim()||m.text.length>(m.role==='user'?4000:16000))throw new Error('Tin nhắn không hợp lệ.');
+      if(!m||m.role!==(i%2?'model':'user')||typeof m.text!=='string'||!m.text.trim()||m.text.length>(m.role==='user'?50000:16000))throw new Error('Tin nhắn không hợp lệ.');
       total+=m.text.length;return {role:m.role,parts:[{text:m.text}]};
     });
-    if(total>24000)return output({ok:false});
+    if(total>200000)return output({ok:false});
     var model=request.model;
     if(model!==undefined&&(typeof model!=='string'||homepageModelIds_().indexOf(model)<0))return output({ok:false,reason:'MODEL_UNAVAILABLE',code:400});
     if(model&&homepageModels_().models.indexOf(model)<0)return output({ok:false,reason:'MODEL_UNAVAILABLE',code:400});
@@ -92,4 +92,5 @@ function homepageChat_(envelope) {
     return output({ok:true,text:answer.text,requestedModel:answer.requestedModel,modelVersion:answer.modelVersion});
   }catch(e){return output({ok:false,code:e.code===429?429:502,reason:['CONFIG','HTTP','INCOMPLETE'].indexOf(e.reason)>=0?e.reason:'UNKNOWN',upstreamStatus:Number(e.upstreamStatus)||null,model:getScriptProp_('GEMINI_SHARED_MODEL')||'gemini-3.5-flash-lite'});}
 }
+
 

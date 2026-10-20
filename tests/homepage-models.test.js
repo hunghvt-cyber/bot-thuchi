@@ -28,3 +28,11 @@ test('Google HTTP 404/429/503 use a single request without retry or fallback',()
 test('missing metadata never pretends requested model is verified',()=>{
  const {c}=setup();c.UrlFetchApp.fetch=()=>({getResponseCode:()=>200,getContentText:()=>JSON.stringify({candidates:[{finishReason:'STOP',content:{parts:[{text:'Hi'}]}}]})});assert.equal(c.sharedGeminiResult_([],false).modelVersion,null);
 });
+test('signed 50k escaped input passes GAS envelope, oversize and total limits fail before Google',()=>{
+ const {c,send}=setup();let calls=0;c.sharedGeminiResult_=()=>{calls++;return {text:'ok',requestedModel:'gemini-test',modelVersion:'gemini-test'};};
+ assert.equal(send({messages:[{role:'user',text:'\u0000'.repeat(50000)}]}).ok,true);
+ assert.equal(send({messages:[{role:'user',text:'x'.repeat(50001)}]}).ok,false);
+ assert.equal(send({messages:Array.from({length:39},(_,i)=>({role:i%2?'model':'user',text:'x'}))}).ok,true);
+ const big=[{role:'user',text:'x'.repeat(50000)},{role:'model',text:'x'.repeat(16000)},{role:'user',text:'x'.repeat(50000)},{role:'model',text:'x'.repeat(16000)},{role:'user',text:'x'.repeat(50000)},{role:'model',text:'x'.repeat(16000)},{role:'user',text:'x'.repeat(2001)}];assert.equal(send({messages:big}).ok,false);assert.equal(calls,2);
+});
+
