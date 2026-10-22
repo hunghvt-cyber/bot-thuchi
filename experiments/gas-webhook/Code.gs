@@ -10,8 +10,14 @@ function doGet(e){
   return HtmlService.createHtmlOutput('poorman-webhook-ready');
 }
 function doPost(e){
+  // This route returns before Telegram diagnostics/history; it never opens Sheets.
+  if(e&&e.pathInfo==='macrodroid')return bankRelayPost_(e);
   var webhookSecret=getScriptProp_('RECEIPT_WEBHOOK_SECRET');
   if(webhookSecret&&!receiptWebhookKeyMatches_(e&&e.parameter&&e.parameter.key,webhookSecret))return HtmlService.createHtmlOutput('OK');
+  // Draft replies must not fall through to normal ledger parsing, even after expiry.
+  try{var bankUpdate=JSON.parse(e&&e.postData&&e.postData.contents||'{}');
+    if(bankUpdate.message&&typeof handleBankDraftReply_==='function'&&handleBankDraftReply_(bankUpdate.message))return HtmlService.createHtmlOutput('OK');
+  }catch(bankReplyError){return HtmlService.createHtmlOutput('OK');}
   var started=Date.now(),diag={at:new Date().toISOString(),stage:'received'};
   try{
     var u=JSON.parse(e&&e.postData&&e.postData.contents||'{}');
@@ -82,4 +88,5 @@ function showRecentWebhookLogs(){
  var n=sh.getLastRow();if(n<2)return;
  sh.getRange(Math.max(2,n-19),1,Math.min(20,n-1),9).getDisplayValues().forEach(function(row){console.log(JSON.stringify(row));});
 }
+
 
