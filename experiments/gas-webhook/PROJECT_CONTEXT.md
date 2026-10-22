@@ -1,3 +1,7 @@
+# PREVIEW BRANCH ONLY — MacroDroid intake 23/10/2026
+
+This branch experiment/macrodroid-preview-20261023 contains prepared bank relay code and mocked tests. **Not deployed/enabled, no real Telegram send or Sheets write.** Do not treat it as the active source branch. Active bot remains experiment/gas-webhook-isolated. See [BANK_RELAY_PREVIEW.md](BANK_RELAY_PREVIEW.md) for concrete diff, configuration, owner-only editable drafts, 48-hour retention, test results and remaining limitations. Owner deployment approval is pending; existing workflow hardcodes active branch and does not deploy this preview branch.
+
 # CURRENT OPERATING HANDOFF — 2026-10-16
 
 > **READ THIS SECTION FIRST.** Older sections below are a chronological engineering journal, not current operational instructions. In particular, claims that the new webhook is still a candidate, that the old polling bot is live, or that the main workflow auto-bootstraps polling are superseded.
