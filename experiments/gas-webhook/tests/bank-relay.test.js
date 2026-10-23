@@ -48,7 +48,7 @@ test('BHX package and invoice including order',()=>{const x=env(),t=x.ctx.bankPa
 test('ads/statements/activation no Telegram draft',()=>{for(const e of [sample('com.vnpay.bidv','Gửi 70 triệu, thêm lãi thêm quà','555 triệu ưu đãi'),sample('com.vnpay.bidv','Thông báo BIDV','BIDV thông báo: Sao kê thẻ JCB 0000xx1111 kỳ 20/10: Dư nợ 181,000 VND'),sample('com.vnpay.bidv','Thông báo BIDV','Thẻ 0000xx1111 của Quý khách đã kích hoạt thành công')]){const x=env();assert.equal(post(x,request(e)).status,'ignored');assert.equal(x.calls.length,0);}});
 test('calendar invalid and malformed money cannot be auto recognized',()=>{const x=env();assert.equal(x.ctx.bankDate_('05:24 31/02/2026'),null);assert.equal(x.ctx.bankDate_('29:24 23/10/2026'),null);assert.equal(x.ctx.bankMoney_('4,45,000'),null);assert.equal(x.ctx.bankParse_(sample(undefined,undefined,sample().text.replace('40,000','4,00'))).status,'review');});
 test('unknown transaction creates editable review, no blind amount extraction',()=>{const x=env(),r=post(x,request(sample(undefined,undefined,'Mẫu giao dịch mới 999999')));assert.equal(r.status,'sent');assert.equal(draft(x).state.tx.status,'review');assert.match(x.calls[0].payload.text,/Chưa rõ số tiền/);});
-test('relay succeeds with no Sheets access, original text visible',()=>{const x=env(),r=post(x);assert.equal(r.status,'sent');assert.match(x.calls[0].payload.text,/CHƯA GHI SHEETS/);assert.match(x.calls[0].payload.text,/40,000/);assert.equal(x.calls[0].payload.chat_id,'-10012345');assert.ok(!JSON.stringify(x.calls).includes('a'.repeat(64)));});
+test('relay succeeds with no Sheets access, original text visible',()=>{const x=env(),r=post(x);assert.equal(r.status,'sent');assert.match(x.calls[0].payload.text,/Chưa ghi Sheets/);assert.match(x.calls[0].payload.text,/Chi 40\.000đ/);assert.equal(draft(x).state.original,sample().title+'\n'+sample().text);assert.equal(x.calls[0].payload.chat_id,'-10012345');assert.ok(!JSON.stringify(x.calls).includes('a'.repeat(64)));});
 test('fail closed disabled, missing verification, wrong key or mode',()=>{for(const props of [{BANK_RELAY_ENABLED:'NO'},{BANK_RELAY_VERIFIED:'NO'},{BANK_RELAY_MODE:'WRITE'},{BANK_RELAY_OWNER_ID:''},{BANK_RELAY_KEY:''}]){const x=env({props});assert.equal(post(x).ok,false);assert.equal(x.calls.length,0);}const x=env();assert.equal(post(x,request(sample(),{key:'bad'})).status,'unauthorized');assert.equal(x.calls.length,0);});
 test('fixed request replay deduped; claim is before Telegram call',()=>{let second;const e=request();const x=env({onTelegram:m=>{if(m==='sendMessage'&&!second)second=post(x,e);}});assert.equal(post(x,e).status,'sent');assert.equal(second.status,'pending');assert.equal(post(x,e).status,'duplicate_sent');assert.equal(x.calls.filter(c=>c.method==='sendMessage').length,1);});
 test('same amount different receipt events remain separate',()=>{const x=env();assert.equal(post(x,request(sample(),{at:Date.now()-2})).status,'sent');assert.equal(post(x,request(sample(),{at:Date.now()-1})).status,'sent');assert.equal(x.calls.length,2);});
@@ -66,3 +66,38 @@ test('duplicate Telegram edit update is idempotent',()=>{const x=env();post(x);c
 test('bank draft replies bypass ledger and webhook history',()=>{const x=env();post(x);const m=reply(x);assert.equal(x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({message:m})}}).html,'OK');assert.equal(draft(x).state.tx.amount,50000);});
 test('expired draft and reply to bank note never fall into ledger',()=>{const x=env();const msg={message_id:900,chat:{id:-10012345},from:{id:12345},text:'sửa tiền 50k',reply_to_message:{message_id:123,text:x.ctx.BANK_DRAFT_MARKER_+'\nExpired'}};assert.equal(x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({message:msg})}}).html,'OK');assert.equal(x.calls.length,1);});
 test('Telegram secret validation still precedes draft edits',()=>{const x=env({props:{RECEIPT_WEBHOOK_SECRET:'telegram-secret'}});post(x);const m=reply(x);x.ctx.doPost({parameter:{key:'wrong'},postData:{contents:JSON.stringify({message:m})}});assert.equal(draft(x).state.tx.amount,40000);});
+
+test('compact draft has one amount, no original balance, ID or instructions wall',()=>{
+ const x=env();post(x);const text=x.calls[0].payload.text;
+ assert.ok(text.startsWith('🧪 Nháp ngân hàng'));assert.match(text,/Chi 40\.000đ · VIB · Khác/);
+ assert.ok(text.length<160);assert.ok(!/5,581,643|1111|BANK_DRAFT_V1|Mã nháp|Gốc/.test(text));
+});
+test('legacy draft accepts capitalized money edit and confirms final value',()=>{
+ const x=env();post(x);const m=reply(x,'Sửa tiền 3k');m.reply_to_message.text='🧪 BANK_DRAFT_V1\nold verbose message';
+ x.ctx.handleBankDraftReply_(m);assert.equal(draft(x).state.tx.amount,3000);
+ assert.match(x.calls.find(c=>c.method==='editMessageText').payload.text,/Chi 3\.000đ/);
+ assert.match(x.calls.at(-1).payload.text,/Đã sửa nháp: Chi 3\.000đ/);
+});
+test('grouped VND edits mean exact amount and ambiguous text is rejected',()=>{
+ for(const value of ['3.000','3,000','3000đ','3.000 VND']){const x=env();post(x);x.ctx.handleBankDraftReply_(reply(x,'sửa tiền '+value));assert.equal(draft(x).state.tx.amount,3000);}
+ const x=env();post(x);x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k hay 5k'));assert.equal(draft(x).state.tx.amount,40000);
+});
+test('already identical display skips Telegram edit and confirms success',()=>{
+ const x=env();post(x);x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 40000'));
+ assert.equal(x.calls.filter(c=>c.method==='editMessageText').length,0);
+ assert.match(x.calls.at(-1).payload.text,/Đã sửa nháp: Chi 40\.000đ/);
+});
+test('Telegram not-modified result is success instead of a false failure note',()=>{
+ const x=env({onTelegram:m=>{if(m==='editMessageText')throw Error('Telegram editMessageText HTTP 400: message is not modified');}});
+ post(x);x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k'));
+ assert.equal(draft(x).state.tx.amount,3000);assert.equal(draft(x).state.editing,false);
+ assert.match(x.calls.at(-1).payload.text,/Đã sửa nháp: Chi 3\.000đ/);assert.ok(!draft(x).state.last_edit_error);
+});
+test('actual edit failure exposes saved amount without claiming display success or leaking error details',()=>{
+ const x=env({onTelegram:m=>{if(m==='editMessageText')throw Error('Telegram editMessageText HTTP 429: private payload retry after 5');}});
+ post(x);x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k'));
+ assert.equal(draft(x).state.tx.amount,3000);assert.equal(draft(x).state.editing,false);
+ assert.equal(draft(x).state.last_edit_error.kind,'rate_limited');assert.equal(draft(x).state.last_edit_error.http,429);
+ assert.match(x.calls.at(-1).payload.text,/Đã lưu nháp: Chi 3\.000đ/);assert.match(x.calls.at(-1).payload.text,/Tin gốc chưa xác minh/);
+ assert.ok(!x.calls.at(-1).payload.text.includes('private payload'));
+});
