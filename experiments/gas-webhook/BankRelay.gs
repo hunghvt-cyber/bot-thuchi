@@ -1,6 +1,9 @@
 /** Preview relay + editable Telegram drafts. Explicitly no ledger/SpreadsheetApp access. */
 var BANK_TTL_=48*3600000;
-var BANK_DRAFT_MARKER_='🧪 BANK_DRAFT_V1';
+var BANK_DRAFT_MARKER_='🧪 Nháp ngân hàng';
+function bankIsDraftText_(text){text=String(text||'');return text.indexOf(BANK_DRAFT_MARKER_)===0||text.indexOf('🧪 BANK_DRAFT_V1')===0;}
+function bankAmountText_(amount){return Number.isSafeInteger(amount)&&amount>0?String(amount).replace(/\B(?=(\d{3})+(?!\d))/g,'.')+'đ':'Chưa rõ số tiền';}
+function bankSummary_(state){var t=state.tx;return (t.direction||'Chưa rõ Thu/Chi')+' '+bankAmountText_(t.amount)+' · '+t.source+' · '+(t.category||'Khác');}
 function bankJson_(o){return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);}
 function bankDigest_(s){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s,Utilities.Charset.UTF_8).map(function(b){return ('0'+((b+256)%256).toString(16)).slice(-2);}).join('');}
 function bankEqual_(a,b){a=String(a||'');b=String(b||'');var d=a.length^b.length;for(var i=0;i<b.length;i++)d|=(a.charCodeAt(i)||0)^b.charCodeAt(i);return d===0;}
@@ -53,17 +56,10 @@ function inspectBankRelayReadiness(){
   return {ok:ok,bot:me.username||'',keyConfigured:(p.getProperty('BANK_RELAY_KEY')||'').length>=32,mode:p.getProperty('BANK_RELAY_MODE')||'',enabled:p.getProperty('BANK_RELAY_ENABLED')==='YES'};
 }
 function bankDraftText_(state){
-  var t=state.tx;
-  return BANK_DRAFT_MARKER_+'\nTHỬ NGHIỆM — CHƯA GHI SHEETS'+(state.deleted?' — ĐÃ XÓA NHÁP':'')+'\n'+
-    t.source+' · '+(t.direction||'Chưa rõ Thu/Chi')+' · '+(t.amount?String(t.amount)+'đ':'Chưa rõ số tiền')+'\n'+
-    (t.description||'Chưa nhận diện, cần kiểm tra')+'\nDanh mục: '+(t.category||'Khác')+'\n'+
-    (t.account_suffix?'Tài khoản/thẻ: ••••'+t.account_suffix+'\n':'')+
-    'Thời gian GD: '+(t.transaction_time||'Không có trong thông báo; chỉ biết giờ nhận')+'\n'+
-    (t.reference?'Tham chiếu: '+t.reference+'\n':'')+
-    'Gốc (tối đa 1200 ký tự):\n'+state.original+'\n'+
-    'Mã nháp: '+state.id+' · lưu tối đa 48 giờ\n'+
-    'Reply: sửa tiền 50k / sửa nội dung ... / sửa danh mục ... / sửa loại thu hoặc chi / xóa / khôi phục.\n'+
-    'Chỉ chủ thiết bị đã cấu hình được sửa. Bản nháp chưa nằm trong báo cáo chi tiêu.';
+  var t=state.tx,description=String(t.description||'').replace(/\s+/g,' ').trim();
+  if(description===t.direction)description='';
+  return BANK_DRAFT_MARKER_+(state.deleted?' — ĐÃ XÓA':'')+'\n'+bankSummary_(state)+'\n'+
+    (description?description.slice(0,100)+'\n':'')+'Chưa ghi Sheets · Reply để sửa';
 }
 function bankRelayPost_(e){
   var cfg,event,key,state;
@@ -102,7 +98,7 @@ function bankRelayPost_(e){
 function bankReplyNote_(msg,text){telegramApi_('sendMessage',{chat_id:String(msg.chat.id),reply_to_message_id:msg.message_id,text:BANK_DRAFT_MARKER_+'\n'+text+'\nChưa ghi Sheets.'});}
 function handleBankDraftReply_(msg){
   var reply=msg&&msg.reply_to_message;
-  if(!reply||String(reply.text||'').indexOf(BANK_DRAFT_MARKER_)!==0)return false;
+  if(!reply||!bankIsDraftText_(reply.text))return false;
   // Always consume even expired/unknown bank drafts; never fall through to the ledger parser.
   var p=PropertiesService.getScriptProperties(),map,key,state;
   try{
@@ -122,7 +118,8 @@ function handleBankDraftReply_(msg){
         if(state.deleted)return 'restore_first';
         m[1]=m[1].toLowerCase();var value=m[2].trim();
         if(m[1]==='tiền'||m[1]==='số tiền'){
-          var money=/^\d+$/.test(value)?Number(value):parseMoneyLocal_(value);
+          var plain=value.toLowerCase().replace(/\s*(?:vnd|đ|₫)$/iu,'').trim();
+          var money=/^\d+$/.test(plain)?Number(plain):/^\d{1,3}(?:[.,]\d{3})+$/.test(plain)?bankMoney_(plain,plain.indexOf(',')>=0?',':'.'):/^\d+(?:[.,]\d+)?\s*(?:k|nghìn|ngàn|tr|triệu|củ)(?:\d{1,3})?$/u.test(plain)?parseMoneyLocal_(plain):null;
           if(!Number.isSafeInteger(money)||money<=0||money>1000000000000)return 'invalid_amount';state.tx.amount=money;
         }else if(m[1]==='nội dung'){if(value.length>400)return 'too_long';state.tx.description=value;}
         else if(m[1]==='danh mục'){
@@ -135,9 +132,21 @@ function handleBankDraftReply_(msg){
     });
     if(changed==='duplicate')return true;
     if(changed!=='updated'){bankReplyNote_(msg,{owner_only:'Chỉ chủ thiết bị đã cấu hình được sửa.',busy:'Bản nháp đang được cập nhật, thử lại sau.',restore_first:'Khôi phục bản nháp trước khi sửa.',invalid_amount:'Số tiền không hợp lệ.',invalid_category:'Danh mục hợp lệ: '+FAMILY_CATEGORIES.join(', '),invalid_direction:'Dùng sửa loại thu hoặc sửa loại chi.',too_long:'Nội dung tối đa 400 ký tự.',expired:'Bản nháp hết hạn.',help:'Reply: sửa tiền 50k / sửa nội dung ... / sửa danh mục ... / sửa loại thu hoặc chi / xóa / khôi phục.'}[changed]||'Không cập nhật được bản nháp.');return true;}
-    try{telegramApi_('editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:bankDraftText_(state)});}
-    catch(err){bankReplyNote_(msg,'Đã lưu sửa bản nháp nhưng chưa xác minh cập nhật tin hiển thị.');}
-    finally{bankLock_(function(){var latest=JSON.parse(p.getProperty(key)||'null');if(latest){latest.editing=false;p.setProperty(key,JSON.stringify(latest));}});}
+    var editError=null;
+    try{
+      var newText=bankDraftText_(state);
+      if(String(reply.text||'')!==newText)telegramApi_('editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:newText});
+    }catch(err){
+      // Telegram rejects an identical edit; the requested display is already present.
+      if(!/message is not modified/i.test(String(err&&err.message||'')))editError=err;
+    }finally{bankLock_(function(){var latest=JSON.parse(p.getProperty(key)||'null');if(latest){
+      latest.editing=false;
+      if(editError){var detail=String(editError.message||''),code=detail.match(/HTTP (\d{3})/);latest.last_edit_error={at:Date.now(),kind:/429|retry after/i.test(detail)?'rate_limited':/not found/i.test(detail)?'not_found':/403|forbidden/i.test(detail)?'forbidden':'transport_or_api',http:code?Number(code[1]):null};}
+      else delete latest.last_edit_error;
+      p.setProperty(key,JSON.stringify(latest));
+    }});}
+    if(editError)bankReplyNote_(msg,'Đã lưu nháp: '+bankSummary_(state)+'. Tin gốc chưa xác minh cập nhật; Reply tin gốc để thử lại.');
+    else bankReplyNote_(msg,state.deleted?'Đã xóa nháp.':'Đã sửa nháp: '+bankSummary_(state));
   }catch(err){try{bankReplyNote_(msg,'Chưa hoàn tất cập nhật bản nháp, thử lại sau.');}catch(ignore){}}
   return true;
 }
