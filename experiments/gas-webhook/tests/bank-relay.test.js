@@ -20,7 +20,7 @@ function env(options={}){
   getMainSpreadsheetId:()=>{throw Error('UNEXPECTED_SPREADSHEET_ID');},getFamilyGroupId:()=>values.FAMILY_GROUP_ID
  };
  vm.createContext(ctx);
- for(const f of ['BankNotifications.gs','BankAssist.gs','BankRelay.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
+ for(const f of ['BankNotifications.gs','BankAssist.gs','BankRelay.gs','BankCommit.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
  return {ctx,values,calls,props};
 }
 function sample(pkg='com.vib.myvib2',title='Thông báo giao dịch',text='Tài khoản •••• 1111, phát sinh -40,000 ₫ vào lúc 11:48 22/10/2026. Số dư: 5,581,643 ₫'){return {package_name:pkg,title,text};}
@@ -140,7 +140,7 @@ function callback(x,action='menu',index='',owner=12345,id='callback1'){
 }
 test('category button lists all 14 existing categories, chooses one and preserves amount',()=>{
  const x=env();vm.runInContext(fs.readFileSync(root+'FamilyConfig.gs','utf8'),x.ctx);post(x);
- assert.equal(x.calls[0].payload.reply_markup.inline_keyboard[0][0].text,'Đổi danh mục');
+ assert.equal(x.calls[0].payload.reply_markup.inline_keyboard[0][0].text,'Edit');
  x.ctx.handleBankDraftCallback_(callback(x));const menu=x.calls.filter(c=>c.method==='editMessageReplyMarkup').at(-1).payload.reply_markup.inline_keyboard;
  const choices=menu.flat().filter(c=>c.callback_data.startsWith('bank:cat:'));assert.equal(choices.length,14);
  assert.deepEqual(Array.from(choices,c=>c.text.replace(/^✓ /,'')).sort(),Array.from(x.ctx.FAMILY_CATEGORIES).sort());
@@ -172,7 +172,9 @@ function inputReply(x,kind,value,owner=12345,id=9900){
   reply_to_message:{message_id:Number(key.split('_').at(-1)),text:prompt.payload.text}};
 }
 test('draft action panel has money, content, category, direction and soft-delete buttons',()=>{
- const x=env();post(x);const labels=x.calls[0].payload.reply_markup.inline_keyboard.flat().map(b=>b.text);
+ const x=env();post(x);assert.deepEqual(Array.from(x.calls[0].payload.reply_markup.inline_keyboard.flat(),b=>b.text),['Edit','Duyệt']);
+ x.ctx.handleBankDraftCallback_(callback(x,'edit'));
+ const labels=x.calls.at(-1).payload.reply_markup.inline_keyboard.flat().map(b=>b.text);
  for(const label of ['Sửa tiền','Sửa nội dung','Đổi danh mục','Thu / Chi','Xóa nháp'])assert.ok(labels.includes(label));
  assert.ok(!x.calls[0].payload.text.includes('Reply để sửa'));
 });
@@ -235,4 +237,85 @@ test('early acknowledgement never hides subsequent API failure and legacy text s
  assert.match(x.calls.at(-1).payload.text,/Chưa mở được thao tác/);assert.equal(draft(x).state.editing,false);
  const y=env();post(y);const cb=callback(y,'menu');cb.message.text='🧪 BANK_DRAFT_V1\nLegacy long notification';
  y.ctx.handleBankDraftCallback_(cb);assert.equal(y.calls.filter(c=>c.method==='editMessageText').length,1);
+});
+function ledger(x,options={}){
+ const rows=[Array(18).fill('Header')];let writes=0;
+ const sh={getLastRow:()=>rows.length,getRange:(r,c,n=1,w=1)=>({getValues:()=>rows.slice(r-1,r-1+n).map(row=>row.slice(c-1,c-1+w)),setValue:v=>{rows[r-1][c-1]=v;}}),
+ appendRow:row=>{writes++;rows.push(Array.from(row));if(options.onAppend)options.onAppend(row);}};
+ x.ctx.familySheet_=()=>sh;x.ctx.SpreadsheetApp={flush:()=>{if(options.onFlush)options.onFlush();}};
+ x.ctx.Utilities.formatDate=date=>new Date(date.getTime()+7*3600000).toISOString().slice(0,10).split('-').reverse().join('/');
+ return {rows,writes:()=>writes,sh};
+}
+test('owner Duyệt writes edited exact VND/type/category once to existing 18-column schema',()=>{
+ const x=env();post(x);const l=ledger(x);x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k'));
+ const cb=callback(x,'approve');cb.from.first_name='Hung';x.ctx.handleBankDraftCallback_(cb);
+ assert.equal(l.writes(),1);const row=l.rows[1];assert.equal(row.length,18);assert.equal(row[7],3000);assert.equal(row[4],'ChiTieu');assert.equal(row[2],'12345');assert.equal(row[3],'Hung');
+ assert.equal(row[9],'-10012345');assert.equal(row[10],String(draft(x).state.message_id));assert.equal(row[11],'bank');assert.equal(row[15],'ACTIVE');assert.match(row[13],/^bank:[a-f0-9]{64}$/);
+ assert.equal(row[0].toISOString(),'2026-10-22T04:48:00.000Z');assert.equal(row[1],'22/10/2026');
+ assert.equal(row[14],'Ngân hàng: VIB');assert.ok(!row[14].includes('Số dư'));
+ assert.equal(draft(x).state.recorded,true);const display=x.calls.filter(c=>c.method==='editMessageText').at(-1).payload;
+ assert.match(display.text,/✅ Đã ghi sổ\nChi 3\.000đ/);assert.equal(display.reply_markup.inline_keyboard.length,0);
+ x.ctx.handleBankDraftCallback_(cb);x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'approve-again'));assert.equal(l.writes(),1);
+});
+test('income approval and receipt-only time use original captured time, not approval time',()=>{
+ const x=env(),at=Date.now()-600000;post(x,request(sample('com.bachhoaxanh','Hóa đơn 109.000đ tại Bách Hóa XANH','Bấm để xem chi tiết đơn hàng OV000000002 của Chị tại cửa hàng Bách Hóa XANH'),{at}));
+ const l=ledger(x);x.ctx.handleBankDraftCallback_(callback(x,'income'));
+ x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'approve1'));assert.equal(l.rows[1][4],'ThuNhap');assert.equal(l.rows[1][0].getTime(),at);
+});
+test('approval rejects missing amount/direction, deleted/expired, wrong owner/group and disabled intake',()=>{
+ for(const mode of ['amount','direction','deleted','expired','owner','group','disabled']){
+  const x=env();post(x);const l=ledger(x),d=draft(x),cb=callback(x,'approve');
+  if(mode==='amount')delete d.state.tx.amount;if(mode==='direction')delete d.state.tx.direction;
+  if(mode==='deleted')d.state.deleted=true;if(mode==='expired')d.state.expires=0;
+  if(mode==='owner')cb.from.id=777;if(mode==='group')cb.message.chat.id=-999;if(mode==='disabled')x.values.BANK_RELAY_ENABLED='NO';
+  x.props.setProperty(d.key,JSON.stringify(d.state));x.ctx.handleBankDraftCallback_(cb);assert.equal(l.writes(),0,mode);
+ }
+});
+test('forged webhook cannot approve and intake never writes until an owner clicks Duyệt',()=>{
+ const x=env(),l=ledger(x);post(x);assert.equal(l.writes(),0);
+ x.ctx.handleBankDraftCallback_(callback(x,'edit'));assert.equal(l.writes(),0);
+ x.ctx.doPost({parameter:{key:'wrong'},postData:{contents:JSON.stringify({callback_query:callback(x,'approve')})}});assert.equal(l.writes(),0);
+ x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({callback_query:callback(x,'approve','',12345,'valid')})}});assert.equal(l.writes(),1);
+});
+test('concurrent approval is serialized by shared ScriptLock and acknowledges before append',()=>{
+ const x=env();post(x);let nested=false;
+ const l=ledger(x,{onAppend:()=>{assert.ok(x.calls.some(c=>c.method==='answerCallbackQuery'));nested=true;x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'parallel'));}});
+ x.ctx.handleBankDraftCallback_(callback(x,'approve'));assert.equal(nested,true);assert.equal(l.writes(),1);assert.equal(draft(x).state.editing,false);
+});
+test('ambiguous flush failure after row write recovers by durable key without appending again',()=>{
+ const x=env();post(x);let fail=true;const l=ledger(x,{onFlush:()=>{if(fail)throw Error('Sheets timeout after append');}});
+ x.ctx.handleBankDraftCallback_(callback(x,'approve'));assert.equal(l.writes(),1);assert.ok(!draft(x).state.recorded);assert.equal(draft(x).state.editing,false);
+ assert.match(x.calls.at(-1).payload.text,/Chưa xác minh ghi sổ/);fail=false;
+ x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'retry'));assert.equal(l.writes(),1);assert.equal(draft(x).state.recorded,true);
+});
+test('lost temporary recorded flag and later soft-delete never produce another ledger row',()=>{
+ const x=env();post(x);const l=ledger(x);x.ctx.handleBankDraftCallback_(callback(x,'approve'));
+ const d=draft(x);delete d.state.recorded;d.state.callback_ids=[];x.props.setProperty(d.key,JSON.stringify(d.state));l.rows[1][15]='DELETED';
+ x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'retry'));assert.equal(l.writes(),1);assert.equal(l.rows[1][15],'DELETED');assert.match(x.calls.at(-1).payload.text,/Giao dịch đã xóa/);
+});
+test('failed Telegram edit after approval leaves one row and binds fallback confirmation for existing edits',()=>{
+ const x=env({onTelegram:m=>{if(m==='editMessageText')throw Error('offline');}});post(x);const l=ledger(x);
+ x.ctx.handleBankDraftCallback_(callback(x,'approve'));assert.equal(l.writes(),1);assert.equal(draft(x).state.recorded,true);
+ const sent=x.calls.filter(c=>c.method==='sendMessage').at(-1);assert.match(sent.payload.text,/Đã ghi sổ/);assert.notEqual(l.rows[1][16],String(draft(x).state.message_id));
+ x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'retry'));assert.equal(l.writes(),1);
+});
+test('old input prompt and draft command cannot mutate approved transaction',()=>{
+ const x=env();post(x);x.ctx.handleBankDraftCallback_(callback(x,'money'));const m=inputReply(x,'money','3k');
+ const l=ledger(x);x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'approve'));
+ x.ctx.handleBankDraftReply_(m);x.ctx.handleBankDraftReply_(reply(x,'xóa'));
+ assert.equal(draft(x).state.tx.amount,40000);assert.ok(!draft(x).state.deleted);assert.equal(l.rows[1][7],40000);assert.equal(l.rows[1][15],'ACTIVE');
+});
+test('two legitimate events with the same amount retain distinct ledger identities',()=>{
+ const x=env(),l=ledger(x);post(x,request(sample(),{at:Date.now()-1}));x.ctx.handleBankDraftCallback_(callback(x,'approve'));
+ const first=draft(x).key;delete x.values[first];post(x,request(sample(),{at:Date.now()}));x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'second'));
+ assert.equal(l.writes(),2);assert.notEqual(l.rows[1][13],l.rows[2][13]);
+});
+test('expired editing lease recovers a killed approval without letting concurrent clicks write twice',()=>{
+ const x=env();post(x);const l=ledger(x),d=draft(x);d.state.editing=true;d.state.editing_at=Date.now()-121000;x.props.setProperty(d.key,JSON.stringify(d.state));
+ x.ctx.handleBankDraftCallback_(callback(x,'approve'));assert.equal(l.writes(),1);assert.equal(draft(x).state.editing,false);
+});
+test('new bank ledger strings cannot execute a spreadsheet formula',()=>{
+ const x=env();post(x);x.ctx.handleBankDraftReply_(reply(x,'sửa nội dung =IMPORTXML("example","//a")'));
+ const l=ledger(x),cb=callback(x,'approve');cb.from.first_name='=1+1';x.ctx.handleBankDraftCallback_(cb);
+ assert.ok(l.rows[1][6].startsWith("'="));assert.ok(l.rows[1][3].startsWith("'="));
 });

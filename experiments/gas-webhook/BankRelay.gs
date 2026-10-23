@@ -1,4 +1,4 @@
-/** Preview relay + editable Telegram drafts. Explicitly no ledger/SpreadsheetApp access. */
+/** Intake creates drafts only; ledger writes require separate owner approval. */
 var BANK_TTL_=48*3600000;
 var BANK_DRAFT_MARKER_='🧪 Nháp ngân hàng';
 function bankIsDraftText_(text){text=String(text||'');return text.indexOf(BANK_DRAFT_MARKER_)===0||text.indexOf('🧪 BANK_DRAFT_V1')===0;}
@@ -75,7 +75,7 @@ function bankRelayPost_(e){
       if(existing)return {existing:JSON.parse(existing)};
       var all=cfg.props.getProperties(),used=Object.keys(all).reduce(function(n,k){return n+2*(k.length+all[k].length);},0);
       if(used>300000)throw new Error('bank_capacity');
-      state={id:Utilities.getUuid().replace(/-/g,'').slice(0,12),status:'pending',created:now,expires:event.captured_at+BANK_TTL_,group:cfg.group,owner:cfg.owner,tx:null,original:(event.title+'\n'+event.text).slice(0,1200)};
+      state={id:Utilities.getUuid().replace(/-/g,'').slice(0,12),status:'pending',created:now,captured_at:event.captured_at,expires:event.captured_at+BANK_TTL_,group:cfg.group,owner:cfg.owner,tx:null,original:(event.title+'\n'+event.text).slice(0,1200)};
       cfg.props.setProperty(key,JSON.stringify(state));return {state:state};
     });
     if(claimed.existing)return bankJson_({ok:claimed.existing.status==='sent'||claimed.existing.status==='ignored',status:claimed.existing.status==='sent'?'duplicate_sent':claimed.existing.status,event_id:claimed.existing.id});
@@ -111,8 +111,9 @@ function handleBankDraftReply_(msg){
       state=JSON.parse(p.getProperty(key)||'null');
       if(!state||state.expires<=Date.now()||String(state.group)!==String(msg.chat.id))return 'expired';
       if(String(state.owner)!==String(msg.from&&msg.from.id))return 'owner_only';
+      if(state.recorded)return 'recorded';
       if((state.edit_ids||[]).indexOf(String(msg.message_id))>=0)return 'duplicate';
-      if(state.editing)return 'busy';
+      if(state.editing&&(!state.editing_at||Date.now()-state.editing_at<120000))return 'busy';
       var cmd=String(msg.text||'').trim();
       if(map.inputKind&&/^hủy$/iu.test(cmd)){p.deleteProperty('BANK_MSG_'+msg.chat.id+'_'+reply.message_id);return 'cancelled';}
       if(map.inputKind==='money')cmd='sửa tiền '+cmd;
@@ -133,11 +134,12 @@ function handleBankDraftReply_(msg){
           if(!cat)return 'invalid_category';state.tx.category=cat;
         }else{if(!/^(thu|chi)$/iu.test(value))return 'invalid_direction';state.tx.direction=/^thu$/iu.test(value)?'Thu':'Chi';}
       }else return 'help';
-      state.editing=true;state.edit_ids=(state.edit_ids||[]).concat(String(msg.message_id)).slice(-20);
+      state.editing=true;state.editing_at=Date.now();state.edit_ids=(state.edit_ids||[]).concat(String(msg.message_id)).slice(-20);
       p.setProperty(key,JSON.stringify(state));return 'updated';
     });
     if(changed==='duplicate')return true;
-    if(changed!=='updated'){bankReplyNote_(msg,{cancelled:'Đã hủy nhập.',owner_only:'Chỉ chủ thiết bị đã cấu hình được sửa.',busy:'Bản nháp đang được cập nhật, thử lại sau.',restore_first:'Khôi phục bản nháp trước khi sửa.',invalid_amount:'Số tiền không hợp lệ.',invalid_category:'Sửa danh mục '+FAMILY_CATEGORIES.join(' / '),invalid_direction:'Dùng sửa loại thu hoặc sửa loại chi.',too_long:'Nội dung tối đa 400 ký tự.',expired:'Bản nháp hết hạn.',help:'Dùng các nút dưới tin nháp để sửa tiền, nội dung, danh mục, thu/chi hoặc xóa.'}[changed]||'Không cập nhật được bản nháp.');return true;}
+    if(changed==='recorded'){telegramApi_('sendMessage',{chat_id:String(msg.chat.id),reply_to_message_id:msg.message_id,text:'Giao dịch đã ghi sổ. Reply tin xác nhận để sửa hoặc xóa.'});return true;}
+    if(changed!=='updated'){bankReplyNote_(msg,{recorded:'Đã ghi sổ. Reply tin xác nhận mới để sửa hoặc xóa.',cancelled:'Đã hủy nhập.',owner_only:'Chỉ chủ thiết bị đã cấu hình được sửa.',busy:'Bản nháp đang được cập nhật, thử lại sau.',restore_first:'Khôi phục bản nháp trước khi sửa.',invalid_amount:'Số tiền không hợp lệ.',invalid_category:'Sửa danh mục '+FAMILY_CATEGORIES.join(' / '),invalid_direction:'Dùng sửa loại thu hoặc sửa loại chi.',too_long:'Nội dung tối đa 400 ký tự.',expired:'Bản nháp hết hạn.',help:'Dùng các nút dưới tin nháp để sửa tiền, nội dung, danh mục, thu/chi hoặc xóa.'}[changed]||'Không cập nhật được bản nháp.');return true;}
     var editError=null;
     try{
       var newText=bankDraftText_(state);
