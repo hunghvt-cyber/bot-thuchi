@@ -15,7 +15,7 @@ function bankReadEnvelope_(e){
   var p=raw.replace(/\r\n/g,'\n').split('\n');
   if(p.shift()!=='BANK-NOTIFY-1')throw new Error('invalid_request');
   var key=p.shift(),device=p.shift(),at=p.shift(),pkg=p.shift(),title=p.shift();
-  if(!/^[A-Za-z0-9_-]{1,50}$/.test(device||'')||!/^\d{13}$/.test(at||'')||!BANK_PACKAGES_[pkg]||typeof title!=='string'||title.length>200)throw new Error('invalid_request');
+  if(!/^[A-Za-z0-9_-]{1,50}$/.test(device||'')||!/^\d{13}$/.test(at||'')||!/^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$/.test(pkg||'')||String(pkg||'').length>200||typeof title!=='string'||title.length>200)throw new Error('invalid_request');
   return {key:key,device:device,captured_at:Number(at),package_name:pkg,title:title,text:p.join('\n')};
 }
 function bankClean_(props,now){
@@ -67,8 +67,7 @@ function bankRelayPost_(e){
     cfg=bankConfig_();event=bankReadEnvelope_(e);
     if(!bankEqual_(event.key,cfg.key))return bankJson_({ok:false,status:'unauthorized'});
     var now=Date.now();if(event.captured_at>now+300000||event.captured_at+BANK_TTL_<=now)return bankJson_({ok:false,status:'expired_or_future'});
-    var tx=bankParse_(event);
-    if(tx.status==='ignored')return bankJson_({ok:true,status:'ignored',reason:tx.reason});
+    var tx;
     // Exact request identity includes receipt time, source, title and complete content; never amount-only.
     key='BANK_EVT_'+bankDigest_([event.device,event.captured_at,event.package_name,event.title,event.text].join('\n'));
     var claimed=bankLock_(function(){
@@ -76,13 +75,16 @@ function bankRelayPost_(e){
       if(existing)return {existing:JSON.parse(existing)};
       var all=cfg.props.getProperties(),used=Object.keys(all).reduce(function(n,k){return n+2*(k.length+all[k].length);},0);
       if(used>300000)throw new Error('bank_capacity');
-      state={id:Utilities.getUuid().replace(/-/g,'').slice(0,12),status:'pending',created:now,expires:event.captured_at+BANK_TTL_,group:cfg.group,owner:cfg.owner,tx:tx,original:(event.title+'\n'+event.text).slice(0,1200)};
+      state={id:Utilities.getUuid().replace(/-/g,'').slice(0,12),status:'pending',created:now,expires:event.captured_at+BANK_TTL_,group:cfg.group,owner:cfg.owner,tx:null,original:(event.title+'\n'+event.text).slice(0,1200)};
       cfg.props.setProperty(key,JSON.stringify(state));return {state:state};
     });
-    if(claimed.existing)return bankJson_({ok:claimed.existing.status==='sent',status:claimed.existing.status==='sent'?'duplicate_sent':claimed.existing.status,event_id:claimed.existing.id});
+    if(claimed.existing)return bankJson_({ok:claimed.existing.status==='sent'||claimed.existing.status==='ignored',status:claimed.existing.status==='sent'?'duplicate_sent':claimed.existing.status,event_id:claimed.existing.id});
     state=claimed.state;
+    tx=bankDetect_(event);state.tx=tx;
+    if(tx.status==='ignored'){state.status='ignored';bankLock_(function(){cfg.props.setProperty(key,JSON.stringify(state));});return bankJson_({ok:true,status:'ignored',reason:tx.reason});}
+    bankLock_(function(){cfg.props.setProperty(key,JSON.stringify(state));});
     try{
-      var sent=telegramApi_('sendMessage',{chat_id:String(cfg.group),text:bankDraftText_(state)});
+      var sent=telegramApi_('sendMessage',{chat_id:String(cfg.group),text:bankDraftText_(state),reply_markup:bankKeyboard_(state,false)});
       if(!sent.result||!sent.result.message_id)throw new Error('no_message_id');
       bankLock_(function(){state.status='sent';state.message_id=sent.result.message_id;
         cfg.props.setProperty(key,JSON.stringify(state));
@@ -131,11 +133,11 @@ function handleBankDraftReply_(msg){
       p.setProperty(key,JSON.stringify(state));return 'updated';
     });
     if(changed==='duplicate')return true;
-    if(changed!=='updated'){bankReplyNote_(msg,{owner_only:'Chỉ chủ thiết bị đã cấu hình được sửa.',busy:'Bản nháp đang được cập nhật, thử lại sau.',restore_first:'Khôi phục bản nháp trước khi sửa.',invalid_amount:'Số tiền không hợp lệ.',invalid_category:'Danh mục hợp lệ: '+FAMILY_CATEGORIES.join(', '),invalid_direction:'Dùng sửa loại thu hoặc sửa loại chi.',too_long:'Nội dung tối đa 400 ký tự.',expired:'Bản nháp hết hạn.',help:'Reply: sửa tiền 50k / sửa nội dung ... / sửa danh mục ... / sửa loại thu hoặc chi / xóa / khôi phục.'}[changed]||'Không cập nhật được bản nháp.');return true;}
+    if(changed!=='updated'){bankReplyNote_(msg,{owner_only:'Chỉ chủ thiết bị đã cấu hình được sửa.',busy:'Bản nháp đang được cập nhật, thử lại sau.',restore_first:'Khôi phục bản nháp trước khi sửa.',invalid_amount:'Số tiền không hợp lệ.',invalid_category:'Sửa danh mục '+FAMILY_CATEGORIES.join(' / '),invalid_direction:'Dùng sửa loại thu hoặc sửa loại chi.',too_long:'Nội dung tối đa 400 ký tự.',expired:'Bản nháp hết hạn.',help:'Reply: sửa tiền 50k; sửa nội dung ...; sửa loại thu/chi. Sửa danh mục '+FAMILY_CATEGORIES.join(' / ')+'. Hoặc bấm Đổi danh mục.'}[changed]||'Không cập nhật được bản nháp.');return true;}
     var editError=null;
     try{
       var newText=bankDraftText_(state);
-      if(String(reply.text||'')!==newText)telegramApi_('editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:newText});
+      if(String(reply.text||'')!==newText)telegramApi_('editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:newText,reply_markup:bankKeyboard_(state,false)});
     }catch(err){
       // Telegram rejects an identical edit; the requested display is already present.
       if(!/message is not modified/i.test(String(err&&err.message||'')))editError=err;
