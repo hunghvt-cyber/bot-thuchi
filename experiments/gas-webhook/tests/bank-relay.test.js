@@ -29,6 +29,12 @@ function request(e=sample(),opts={}){
  return {pathInfo:'macrodroid',postData:{contents:['BANK-NOTIFY-1',opts.key||'a'.repeat(64),'s25-ultra',opts.at||Date.now(),e.package_name,e.title,e.text].join('\n')}};
 }
 function post(x,e=request()){return JSON.parse(x.ctx.doPost(e).text);}
+test('query intake route preserves authentication and never falls into Telegram ledger',()=>{
+ const x=env(),e=request();delete e.pathInfo;e.parameter={intake:'macrodroid'};
+ assert.equal(post(x,e).status,'sent');assert.equal(post(x,e).status,'duplicate_sent');
+ const y=env(),bad=request(sample(),{key:'bad'});delete bad.pathInfo;bad.parameter={intake:'macrodroid'};
+ assert.equal(post(y,bad).status,'unauthorized');assert.equal(y.calls.length,0);
+});
 function draft(x){const k=Object.keys(x.values).find(k=>k.startsWith('BANK_EVT_'));return {key:k,state:JSON.parse(x.values[k])};}
 function reply(x,text='sửa tiền 50k',owner=12345,id=800){
  const s=draft(x).state;
