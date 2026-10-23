@@ -22,7 +22,8 @@ function bankClean_(props,now){
   var all=props.getProperties();Object.keys(all).forEach(function(k){
     if(!/^BANK_(EVT|MSG)_/.test(k))return;
     var v;try{v=JSON.parse(all[k]);}catch(ignore){}
-    if(!v||v.expires<=now)props.deleteProperty(k);
+    var deadline=v?(/^BANK_EVT_/.test(k)?bankLogExpires_(v):Number(v.expires)):NaN;
+    if(!isFinite(deadline)||deadline<=now)props.deleteProperty(k);
   });
 }
 function cleanupBankRelayState(){return bankLock_(function(){bankClean_(PropertiesService.getScriptProperties(),Date.now());return {ok:true};});}
