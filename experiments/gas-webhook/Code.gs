@@ -11,7 +11,7 @@ function doGet(e){
 }
 function doPost(e){
   // This route returns before Telegram diagnostics/history; it never opens Sheets.
-  if(e&&e.pathInfo==='macrodroid')return bankRelayPost_(e);
+  if(e&&(e.pathInfo==='macrodroid'||e.parameter&&e.parameter.intake==='macrodroid'))return bankRelayPost_(e);
   var webhookSecret=getScriptProp_('RECEIPT_WEBHOOK_SECRET');
   if(webhookSecret&&!receiptWebhookKeyMatches_(e&&e.parameter&&e.parameter.key,webhookSecret))return HtmlService.createHtmlOutput('OK');
   // Draft replies must not fall through to normal ledger parsing, even after expiry.
