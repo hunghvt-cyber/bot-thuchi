@@ -59,7 +59,7 @@ function bankDraftText_(state){
   var t=state.tx,description=String(t.description||'').replace(/\s+/g,' ').trim();
   if(description===t.direction)description='';
   return BANK_DRAFT_MARKER_+(state.deleted?' — ĐÃ XÓA':'')+'\n'+bankSummary_(state)+'\n'+
-    (description?description.slice(0,100)+'\n':'')+'Chưa ghi Sheets · Reply để sửa';
+    (description?description.slice(0,100)+'\n':'')+'Chưa ghi Sheets';
 }
 function bankRelayPost_(e){
   var cfg,event,key,state;
@@ -113,7 +113,11 @@ function handleBankDraftReply_(msg){
       if(String(state.owner)!==String(msg.from&&msg.from.id))return 'owner_only';
       if((state.edit_ids||[]).indexOf(String(msg.message_id))>=0)return 'duplicate';
       if(state.editing)return 'busy';
-      var cmd=String(msg.text||'').trim(),m=cmd.match(/^sửa\s+(tiền|số tiền|nội dung|danh mục|loại)\s+([^]+)$/iu);
+      var cmd=String(msg.text||'').trim();
+      if(map.inputKind&&/^hủy$/iu.test(cmd)){p.deleteProperty('BANK_MSG_'+msg.chat.id+'_'+reply.message_id);return 'cancelled';}
+      if(map.inputKind==='money')cmd='sửa tiền '+cmd;
+      if(map.inputKind==='description')cmd='sửa nội dung '+cmd;
+      var m=cmd.match(/^sửa\s+(tiền|số tiền|nội dung|danh mục|loại)\s+([^]+)$/iu);
       if(/^(xóa|xoá)$/iu.test(cmd))state.deleted=true;
       else if(/^khôi phục$/iu.test(cmd))state.deleted=false;
       else if(m){
@@ -133,11 +137,11 @@ function handleBankDraftReply_(msg){
       p.setProperty(key,JSON.stringify(state));return 'updated';
     });
     if(changed==='duplicate')return true;
-    if(changed!=='updated'){bankReplyNote_(msg,{owner_only:'Chỉ chủ thiết bị đã cấu hình được sửa.',busy:'Bản nháp đang được cập nhật, thử lại sau.',restore_first:'Khôi phục bản nháp trước khi sửa.',invalid_amount:'Số tiền không hợp lệ.',invalid_category:'Sửa danh mục '+FAMILY_CATEGORIES.join(' / '),invalid_direction:'Dùng sửa loại thu hoặc sửa loại chi.',too_long:'Nội dung tối đa 400 ký tự.',expired:'Bản nháp hết hạn.',help:'Reply: sửa tiền 50k; sửa nội dung ...; sửa loại thu/chi. Sửa danh mục '+FAMILY_CATEGORIES.join(' / ')+'. Hoặc bấm Đổi danh mục.'}[changed]||'Không cập nhật được bản nháp.');return true;}
+    if(changed!=='updated'){bankReplyNote_(msg,{cancelled:'Đã hủy nhập.',owner_only:'Chỉ chủ thiết bị đã cấu hình được sửa.',busy:'Bản nháp đang được cập nhật, thử lại sau.',restore_first:'Khôi phục bản nháp trước khi sửa.',invalid_amount:'Số tiền không hợp lệ.',invalid_category:'Sửa danh mục '+FAMILY_CATEGORIES.join(' / '),invalid_direction:'Dùng sửa loại thu hoặc sửa loại chi.',too_long:'Nội dung tối đa 400 ký tự.',expired:'Bản nháp hết hạn.',help:'Dùng các nút dưới tin nháp để sửa tiền, nội dung, danh mục, thu/chi hoặc xóa.'}[changed]||'Không cập nhật được bản nháp.');return true;}
     var editError=null;
     try{
       var newText=bankDraftText_(state);
-      if(String(reply.text||'')!==newText)telegramApi_('editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:newText,reply_markup:bankKeyboard_(state,false)});
+      if(map.inputKind||String(reply.text||'')!==newText)telegramApi_('editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:newText,reply_markup:bankKeyboard_(state,false)});
     }catch(err){
       // Telegram rejects an identical edit; the requested display is already present.
       if(!/message is not modified/i.test(String(err&&err.message||'')))editError=err;

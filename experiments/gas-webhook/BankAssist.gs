@@ -44,18 +44,30 @@ function bankDetect_(event){
       direction:obj.direction,amount:amount,currency:'VND',description:desc,category:category,parser:'gemini'};
   }catch(err){fallback.reason='gemini_unavailable_or_invalid';return fallback;}
 }
-function bankKeyboard_(state,expanded){
-  if(state.deleted)return {inline_keyboard:[]};
-  if(!expanded)return {inline_keyboard:[[{text:'Đổi danh mục',callback_data:'bank:menu:'+state.id}]]};
+function bankKeyboard_(state,view){
+  function button(text,action){return {text:text,callback_data:'bank:'+action+':'+state.id};}
+  if(state.deleted)return {inline_keyboard:[[button('Khôi phục nháp','restore')]]};
+  if(view==='type')return {inline_keyboard:[[button('Thu','income'),button('Chi','expense')],[button('Quay lại','close')]]};
+  if(!view)return {inline_keyboard:[[button('Đổi danh mục','menu'),button('Thu / Chi','kind')],
+    [button('Sửa tiền','money'),button('Sửa nội dung','description')],[button('Xóa nháp','delete')]]};
   var categories=state.category_choices||FAMILY_CATEGORIES,rows=[];
   for(var i=0;i<categories.length;i+=2)rows.push(categories.slice(i,i+2).map(function(c,n){return {text:(c===state.tx.category?'✓ ':'')+c,callback_data:'bank:cat:'+state.id+':'+(i+n)};}));
-  rows.push([{text:'Đóng',callback_data:'bank:close:'+state.id}]);return {inline_keyboard:rows};
+  rows.push([button('Quay lại','close')]);return {inline_keyboard:rows};
+}
+function bankPromptForInput_(state,key,kind){
+  var money=kind==='money',text=money?'nhập số tiền mới, ví dụ 50k hoặc 50.000.':'nhập nội dung mới.';
+  var sent=telegramApi_('sendMessage',{chat_id:String(state.group),parse_mode:'HTML',
+    text:BANK_DRAFT_MARKER_+'\n<a href="tg://user?id='+state.owner+'">Đại ca</a>, '+text+'\nChưa ghi Sheets · yêu cầu hết hạn sau 5 phút.',
+    reply_markup:{force_reply:true,selective:true,input_field_placeholder:money?'Ví dụ: 50k':'Nội dung mới'}});
+  if(!sent.result||!sent.result.message_id)throw Error('input_prompt_failed');
+  bankLock_(function(){PropertiesService.getScriptProperties().setProperty('BANK_MSG_'+state.group+'_'+sent.result.message_id,
+    JSON.stringify({eventKey:key,inputKind:kind,expires:Math.min(state.expires,Date.now()+300000)}));});
 }
 function handleBankDraftCallback_(cb){
-  var match=String(cb&&cb.data||'').match(/^bank:(menu|cat|close):([a-f0-9]{12})(?::(\d{1,2}))?$/);
+  var match=String(cb&&cb.data||'').match(/^bank:(menu|cat|close|kind|income|expense|money|description|delete|restore):([a-f0-9]{12})(?::(\d{1,2}))?$/);
   if(!match)return String(cb&&cb.data||'').indexOf('bank:')===0;
   function ack(text){try{telegramApi_('answerCallbackQuery',{callback_query_id:cb.id,text:text});}catch(ignore){}}
-  var msg=cb.message,p=PropertiesService.getScriptProperties(),state,key,changed=false;
+  var msg=cb.message,p=PropertiesService.getScriptProperties(),state,key,changed=false,view=false;
   if(!msg||!msg.chat){ack('Không có bản nháp.');return true;}
   try{
     var result=bankLock_(function(){
@@ -64,23 +76,29 @@ function handleBankDraftCallback_(cb){
       key=map.eventKey;state=JSON.parse(p.getProperty(key)||'null');
       if(!state||state.id!==match[2]||state.expires<=Date.now()||String(state.group)!==String(msg.chat.id)||state.message_id!==msg.message_id)return 'Bản nháp không còn khả dụng.';
       if(String(state.owner)!==String(cb.from&&cb.from.id))return 'Chỉ chủ thiết bị được sửa.';
-      if(state.deleted)return 'Khôi phục bản nháp trước khi sửa.';
+      if(state.deleted&&match[1]!=='restore')return 'Khôi phục bản nháp trước khi sửa.';
       if(state.editing)return 'Đang cập nhật, thử lại sau.';
       if((state.callback_ids||[]).indexOf(String(cb.id))>=0)return 'Đã xử lý.';
-      if(match[1]==='menu')state.category_choices=FAMILY_CATEGORIES.slice();
+      if(match[1]==='menu'){state.category_choices=FAMILY_CATEGORIES.slice();view=true;}
+      if(match[1]==='kind')view='type';
       if(match[1]==='cat'){
         var categories=state.category_choices||[],index=Number(match[3]);
         if(match[3]===undefined||!categories[index]||FAMILY_CATEGORIES.indexOf(categories[index])<0)return 'Danh mục không hợp lệ.';
         state.tx.category=categories[index];changed=true;
       }
+      if(match[1]==='income'||match[1]==='expense'){state.tx.direction=match[1]==='income'?'Thu':'Chi';changed=true;}
+      if(match[1]==='delete'||match[1]==='restore'){state.deleted=match[1]==='delete';changed=true;}
       state.editing=true;state.callback_ids=(state.callback_ids||[]).concat(String(cb.id)).slice(-20);p.setProperty(key,JSON.stringify(state));return null;
     });
     if(result){ack(result);return true;}
-    var failed=false;
-    try{telegramApi_('editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:bankDraftText_(state),reply_markup:bankKeyboard_(state,match[1]==='menu')});}
-    catch(err){failed=!/message is not modified/i.test(String(err.message||''));}
+    var failed=false,input=match[1]==='money'||match[1]==='description';
+    try{
+      if(input)bankPromptForInput_(state,key,match[1]);
+      else telegramApi_('editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:bankDraftText_(state),reply_markup:bankKeyboard_(state,view)});
+    }catch(err){failed=!/message is not modified/i.test(String(err.message||''));}
     finally{bankLock_(function(){var latest=JSON.parse(p.getProperty(key)||'null');if(latest){latest.editing=false;p.setProperty(key,JSON.stringify(latest));}});}
-    ack(failed?(changed?'Đã lưu '+state.tx.category+'; tin hiển thị chưa cập nhật.':'Chưa mở được danh mục, thử lại.'):(changed?'Đã chọn '+state.tx.category:'Chọn một danh mục'));
+    ack(failed?(changed?'Đã lưu thay đổi; tin hiển thị chưa cập nhật.':'Chưa mở được thao tác, thử lại.'):
+      input?'Trả lời yêu cầu nhập mới của bot':state.deleted?'Đã xóa nháp':changed?'Đã cập nhật nháp':'Chọn thao tác');
   }catch(err){ack('Chưa hoàn tất, thử lại sau.');}
   return true;
 }
