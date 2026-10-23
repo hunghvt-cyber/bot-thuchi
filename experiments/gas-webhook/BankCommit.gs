@@ -32,6 +32,7 @@ function bankCommit_(key,actor){
     // A timeout after append can leave the row without this state; next click finds it.
     s.tx.amount=Number(found[7]);s.tx.direction=found[4]==='ThuNhap'?'Thu':'Chi';s.tx.category=String(found[5]);s.tx.description=String(found[6]);
     s.recorded=true;s.ledger_id=String(found[12]);s.ledger_status=String(found[15]||'ACTIVE');s.editing=false;
+    var learning=bankLearnEnsure_(s);if(!learning.approved_at){learning.approved_at=Date.now();learning.approved=bankLearnSnapshot_(s.tx);}bankLearnFit_(s);
     p.setProperty(key,JSON.stringify(s));return s;
   });
 }
@@ -41,12 +42,13 @@ function bankApprovedText_(state){
 function bankApproveCallback_(cb,key,state){
   var saved;
   try{saved=bankCommit_(key,cb.from);}catch(err){
-    bankLock_(function(){var p=PropertiesService.getScriptProperties(),s=JSON.parse(p.getProperty(key)||'null');if(s){s.editing=false;p.setProperty(key,JSON.stringify(s));}});
+    bankLock_(function(){var p=PropertiesService.getScriptProperties(),s=JSON.parse(p.getProperty(key)||'null');if(s){s.editing=false;bankLearnError_(s,'ledger_approval',err);p.setProperty(key,JSON.stringify(s));}});
     telegramApi_('sendMessage',{chat_id:String(state.group),reply_to_message_id:state.message_id,
       text:BANK_DRAFT_MARKER_+'\nChưa xác minh ghi sổ. Bấm Duyệt lại để kiểm tra; hệ thống không ghi lặp cùng nháp.'});return;
   }
   try{telegramApi_('editMessageText',{chat_id:String(saved.group),message_id:saved.message_id,text:bankApprovedText_(saved),reply_markup:{inline_keyboard:[]}});}
   catch(err){if(!/message is not modified/i.test(String(err.message||''))){
+    bankLearnStoredError_(key,'telegram_confirmation',err);
     var sent=telegramApi_('sendMessage',{chat_id:String(saved.group),reply_to_message_id:saved.message_id,text:bankApprovedText_(saved)});
     if(sent.result&&sent.result.message_id)bankLock_(function(){
       var sh=familySheet_(),last=sh.getLastRow(),rows=last>1?sh.getRange(2,13,last-1,1).getValues():[];

@@ -80,7 +80,7 @@ function bankRelayPost_(e){
     });
     if(claimed.existing)return bankJson_({ok:claimed.existing.status==='sent'||claimed.existing.status==='ignored',status:claimed.existing.status==='sent'?'duplicate_sent':claimed.existing.status,event_id:claimed.existing.id});
     state=claimed.state;
-    tx=bankDetect_(event);state.tx=tx;
+    tx=bankDetect_(event);state.tx=tx;bankLearnStart_(state,tx);
     if(tx.status==='ignored'){state.status='ignored';bankLock_(function(){cfg.props.setProperty(key,JSON.stringify(state));});return bankJson_({ok:true,status:'ignored',reason:tx.reason});}
     bankLock_(function(){cfg.props.setProperty(key,JSON.stringify(state));});
     try{
@@ -92,7 +92,7 @@ function bankRelayPost_(e){
       return bankJson_({ok:true,status:'sent',event_id:state.id,message_id:state.message_id});
     }catch(sendError){
       // Telegram may have accepted the request. Never blindly resend after ambiguous failure.
-      try{bankLock_(function(){var s=JSON.parse(cfg.props.getProperty(key)||'null');if(s&&s.status!=='sent'){s.status='uncertain';cfg.props.setProperty(key,JSON.stringify(s));}});}catch(ignore){}
+      try{bankLock_(function(){var s=JSON.parse(cfg.props.getProperty(key)||'null');if(s&&s.status!=='sent'){s.status='uncertain';bankLearnError_(s,'telegram_send',sendError);cfg.props.setProperty(key,JSON.stringify(s));}});}catch(ignore){}
       return bankJson_({ok:false,status:'uncertain',event_id:state.id});
     }
   }catch(err){return bankJson_({ok:false,status:/^(disabled|not_configured|bank_busy|bank_capacity)$/.test(err.message)?err.message:'invalid_request'});}
@@ -114,6 +114,7 @@ function handleBankDraftReply_(msg){
       if(state.recorded)return 'recorded';
       if((state.edit_ids||[]).indexOf(String(msg.message_id))>=0)return 'duplicate';
       if(state.editing&&(!state.editing_at||Date.now()-state.editing_at<120000))return 'busy';
+      var before=bankLearnSnapshot_(state.tx);
       var cmd=String(msg.text||'').trim();
       if(map.inputKind&&/^hủy$/iu.test(cmd)){p.deleteProperty('BANK_MSG_'+msg.chat.id+'_'+reply.message_id);return 'cancelled';}
       if(map.inputKind==='money')cmd='sửa tiền '+cmd;
@@ -134,6 +135,7 @@ function handleBankDraftReply_(msg){
           if(!cat)return 'invalid_category';state.tx.category=cat;
         }else{if(!/^(thu|chi)$/iu.test(value))return 'invalid_direction';state.tx.direction=/^thu$/iu.test(value)?'Thu':'Chi';}
       }else return 'help';
+      bankLearnChange_(state,before,/^(xóa|xoá)$/iu.test(cmd)?'delete':/^khôi phục$/iu.test(cmd)?'restore':'reply_edit');
       state.editing=true;state.editing_at=Date.now();state.edit_ids=(state.edit_ids||[]).concat(String(msg.message_id)).slice(-20);
       p.setProperty(key,JSON.stringify(state));return 'updated';
     });
@@ -149,7 +151,7 @@ function handleBankDraftReply_(msg){
       if(!/message is not modified/i.test(String(err&&err.message||'')))editError=err;
     }finally{bankLock_(function(){var latest=JSON.parse(p.getProperty(key)||'null');if(latest){
       latest.editing=false;
-      if(editError){var detail=String(editError.message||''),code=detail.match(/HTTP (\d{3})/);latest.last_edit_error={at:Date.now(),kind:/429|retry after/i.test(detail)?'rate_limited':/not found/i.test(detail)?'not_found':/403|forbidden/i.test(detail)?'forbidden':'transport_or_api',http:code?Number(code[1]):null};}
+      if(editError){bankLearnError_(latest,'telegram_edit',editError);var detail=String(editError.message||''),code=detail.match(/HTTP (\d{3})/);latest.last_edit_error={at:Date.now(),kind:/429|retry after/i.test(detail)?'rate_limited':/not found/i.test(detail)?'not_found':/403|forbidden/i.test(detail)?'forbidden':'transport_or_api',http:code?Number(code[1]):null};}
       else delete latest.last_edit_error;
       p.setProperty(key,JSON.stringify(latest));
     }});}
