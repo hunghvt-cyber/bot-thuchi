@@ -1,6 +1,6 @@
 # MacroDroid → GAS → Telegram: editable preview (23/10/2026)
 
-Status: prepared and mocked tests passed; NOT deployed, NOT enabled, NOT sent to a real Telegram group, NO Sheets writes. Source branch experiment/macrodroid-preview-20261023 derives from experiment/gas-webhook-isolated. Never push these files to the active branch before the owner's deployment approval.
+Status at deployment preparation 23/10/2026: owner APPROVED deploying PREVIEW. Mocked tests passed; workflow deployment and private configuration still require verification. NOT enabled, NOT sent to a real Telegram group, NO Sheets writes. Source branch experiment/macrodroid-preview-20261023 derives from experiment/gas-webhook-isolated. Owner approval has now been received; merge into the active branch as one reviewed change, then verify workflow success.
 
 ## User goal and scope
 
@@ -58,7 +58,7 @@ Pending claim is stored under ScriptLock before send, lock released during Teleg
 
 State capacity is bounded; expired bank keys removed, fresh markers not evicted just to fit more events. At capacity, request returns bank_capacity. Do not log Script Properties values.
 
-## Deployment checklist — owner approval is still required
+## Deployment checklist — owner approved 23/10/2026
 
 1. Review this branch's diff and tests, then integrate to active experiment/gas-webhook-isolated under an approved deployment window. Its push workflow updates the currently used GAS. Do not dispatch existing workflow while changes exist only on this preview branch: it hardcodes the active source ref.
 2. Verify workflow success. This updates code only, not config, setup functions or data.
