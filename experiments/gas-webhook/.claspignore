@@ -13,3 +13,6 @@
 !ReceiptScan.gs
 !FamilyCommands.gs
 !DailyReport.gs
+!BankNotifications.gs
+!BankRelay.gs
+
