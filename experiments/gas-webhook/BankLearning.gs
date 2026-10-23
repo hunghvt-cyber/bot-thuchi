@@ -1,4 +1,9 @@
-/** Bounded learning notes live inside the existing 48h bank event, never a new Sheet. */
+/** Seven-day learning logs share bank event storage; draft approval still expires at 48h. */
+var BANK_LOG_TTL_=7*86400000;
+function bankLogExpires_(s){
+  var captured=Number(s.captured_at)||Number(s.created)||(Number(s.expires)-BANK_TTL_);
+  return captured+BANK_LOG_TTL_;
+}
 function bankLearnSnapshot_(tx){
   tx=tx||{};return {source:String(tx.source||'').slice(0,32),amount:Number.isSafeInteger(tx.amount)?tx.amount:null,
     direction:String(tx.direction||''),category:String(tx.category||''),description:String(tx.description||'').slice(0,80),description_hash:bankDigest_(String(tx.description||'')).slice(0,12),
@@ -42,11 +47,11 @@ function handleBankLogCommand_(msg){
   if(!match)return false;
   var p=PropertiesService.getScriptProperties(),owner=p.getProperty('BANK_RELAY_OWNER_ID'),group=p.getProperty('FAMILY_GROUP_ID');
   if(!owner||!group||String(msg.from&&msg.from.id)!==owner||String(msg.chat&&msg.chat.id)!==group)return true;
-  var now=Date.now(),states=bankLock_(function(){var all=p.getProperties();return Object.keys(all).filter(function(k){return /^BANK_EVT_/.test(k);}).map(function(k){try{return JSON.parse(all[k]);}catch(ignore){return null;}}).filter(function(s){return s&&s.group===group&&s.owner===owner&&s.expires>now;});});
+  var now=Date.now(),states=bankLock_(function(){var all=p.getProperties();return Object.keys(all).filter(function(k){return /^BANK_EVT_/.test(k);}).map(function(k){try{return JSON.parse(all[k]);}catch(ignore){return null;}}).filter(function(s){return s&&s.group===group&&s.owner===owner&&bankLogExpires_(s)>now;});});
   states.sort(function(a,b){return b.created-a.created;});var text;
   if(match[1]&&/^[a-f0-9]{12}$/i.test(match[1])){
     var s=states.filter(function(s){return s.id===match[1].toLowerCase();})[0];
-    if(!s)text='Không tìm thấy log còn hạn 48 giờ.';
+    if(!s)text='Không tìm thấy log còn hạn 7 ngày.';
     else{
       var l=s.learning||{},initial=l.initial;
       text='BANK LOG · '+s.id+' · '+String(s.tx&&s.tx.source||'?')+' · '+bankLearnOutcome_(s,now)+'\nBan đầu: '+(initial?bankLearnValues_(initial)+' · '+initial.parser+(initial.reason?' ('+initial.reason+')':''):'chưa có bản gốc nhận diện (nháp cũ)')+
@@ -58,7 +63,7 @@ function handleBankLogCommand_(msg){
   }else{
     var approved=states.filter(function(s){return s.recorded;}).length,changed=states.filter(function(s){return s.learning&&s.learning.history.length;}).length;
     var page=Math.min(Number(match[1])||1,Math.max(1,Math.ceil(states.length/8))),start=(page-1)*8;
-    text='BANK LOG · cửa sổ 48 giờ\n'+states.length+' thông báo · '+approved+' đã duyệt · '+changed+' có sửa/xóa nháp.\nChưa duyệt không có nghĩa nhận diện sai.\n'+states.slice(start,start+8).map(function(s){return s.id+' · '+String(s.tx&&s.tx.source||'?')+' · '+bankLearnValues_(s.tx||{})+' · '+bankLearnOutcome_(s,now);}).join('\n')+'\nTrang '+page+'/'+Math.max(1,Math.ceil(states.length/8))+' · /banklog 2 để đổi trang.\nXem chi tiết: /banklog mã';
+    text='BANK LOG · cửa sổ 7 ngày\n'+states.length+' thông báo · '+approved+' đã duyệt · '+changed+' có sửa/xóa nháp.\nChưa duyệt không có nghĩa nhận diện sai.\n'+states.slice(start,start+8).map(function(s){return s.id+' · '+String(s.tx&&s.tx.source||'?')+' · '+bankLearnValues_(s.tx||{})+' · '+bankLearnOutcome_(s,now);}).join('\n')+'\nTrang '+page+'/'+Math.max(1,Math.ceil(states.length/8))+' · /banklog 2 để đổi trang.\nXem chi tiết: /banklog mã';
   }
   telegramApi_('sendMessage',{chat_id:group,text:text.slice(0,3800)});return true;
 }
