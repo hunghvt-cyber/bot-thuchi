@@ -35,6 +35,8 @@ function bankDetect_(event){
     // Avoid a substring of an account, balance or larger number being offered as the amount.
     var at=context.indexOf(token),before=context.charAt(at-1),after=context.charAt(at+token.length);
     if(/[\d.,]/.test(before)||/[\d.,]/.test(after))return fallback;
+    var signed=context.slice(0,at).match(/([+-])\s*$/);
+    if(signed&&obj.direction!==(signed[1]==='+'?'Thu':'Chi'))return fallback;
     var desc=String(obj.description||'').replace(/\s+/g,' ').trim().slice(0,400)||'Không rõ mục đích';
     var category=FAMILY_CATEGORIES.indexOf(obj.category)>=0?obj.category:'Khác';
     if(desc==='Không rõ mục đích')category='Khác';
