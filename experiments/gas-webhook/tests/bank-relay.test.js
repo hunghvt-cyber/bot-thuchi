@@ -119,7 +119,7 @@ test('known local format avoids Gemini and uses unknown-purpose default',()=>{
 });
 test('Gemini malformed/ungrounded/balance/nonVND/directionless amounts become review, not guesses',()=>{
  for(const patch of [{amount:99000},{amount_context:'Số dư 99,000 VND',amount_text:'99,000',amount:99000},{amount_context:'made up25,000'},
- {currency:'USD'},{direction:'?'},{direction_context:'invented +25,000'},{amount_text:'5,000',amount:5000}]){
+ {currency:'USD'},{direction:'?'},{direction:'Thu'},{direction_context:'invented +25,000'},{amount_text:'5,000',amount:5000}]){
   const x=env();withAI(x,{...aiResult(),...patch});post(x,request(aiSample()));assert.equal(draft(x).state.tx.status,'review');assert.ok(!draft(x).state.tx.amount);
  }
  const x=env();withAI(x);x.ctx.sharedGemini_=()=>'{bad';assert.equal(post(x,request(aiSample())).status,'sent');assert.equal(draft(x).state.tx.status,'review');
