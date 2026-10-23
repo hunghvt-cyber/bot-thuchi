@@ -20,7 +20,7 @@ function env(options={}){
   getMainSpreadsheetId:()=>{throw Error('UNEXPECTED_SPREADSHEET_ID');},getFamilyGroupId:()=>values.FAMILY_GROUP_ID
  };
  vm.createContext(ctx);
- for(const f of ['BankNotifications.gs','BankAssist.gs','BankRelay.gs','BankCommit.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
+ for(const f of ['BankNotifications.gs','BankAssist.gs','BankRelay.gs','BankCommit.gs','BankLearning.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
  return {ctx,values,calls,props};
 }
 function sample(pkg='com.vib.myvib2',title='Thông báo giao dịch',text='Tài khoản •••• 1111, phát sinh -40,000 ₫ vào lúc 11:48 22/10/2026. Số dư: 5,581,643 ₫'){return {package_name:pkg,title,text};}
@@ -318,4 +318,80 @@ test('new bank ledger strings cannot execute a spreadsheet formula',()=>{
  const x=env();post(x);x.ctx.handleBankDraftReply_(reply(x,'sửa nội dung =IMPORTXML("example","//a")'));
  const l=ledger(x),cb=callback(x,'approve');cb.from.first_name='=1+1';x.ctx.handleBankDraftCallback_(cb);
  assert.ok(l.rows[1][6].startsWith("'="));assert.ok(l.rows[1][3].startsWith("'="));
+});
+test('learning stores immutable initial result, raw provenance and ordered corrections without an extra Telegram call',()=>{
+ const x=env();post(x);const d=draft(x),initial=JSON.stringify(d.state.learning.initial);assert.equal(x.calls.length,1);assert.equal(d.state.learning.initial.amount,40000);assert.equal(d.state.learning.initial.parser,'local');
+ x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k'));
+ x.ctx.handleBankDraftCallback_(callback(x,'income','',12345,'income'));
+ const s=draft(x).state;assert.equal(JSON.stringify(s.learning.initial),initial);assert.equal(s.learning.history.length,2);
+ assert.equal(s.learning.history[0].fields.amount.from,40000);assert.equal(s.learning.history[0].fields.amount.to,3000);
+ assert.equal(s.learning.history[1].fields.direction.to,'Thu');assert.equal(s.original,sample().title+'\n'+sample().text);
+});
+test('Gemini baseline and parser failure notes are distinguished from local recognition and ignored ads',()=>{
+ const x=env();withAI(x);post(x,request(aiSample()));assert.equal(draft(x).state.learning.initial.parser,'gemini');
+ const y=env();withAI(y);y.ctx.sharedGemini_=()=>{throw Error('private GEMINI_API_KEY');};post(y,request(aiSample()));
+ const l=draft(y).state.learning;assert.equal(l.initial.status,'review');assert.equal(l.errors[0].stage,'parser');assert.ok(!JSON.stringify(l).includes('GEMINI_API_KEY'));
+ const z=env();post(z,request(sample('com.vnpay.bidv','Gửi 70 triệu, thêm lãi thêm quà','ưu đãi 555 triệu')));assert.equal(draft(z).state.status,'ignored');assert.equal(z.calls.length,0);assert.equal(z.ctx.bankLearnOutcome_(draft(z).state,Date.now()),'bỏ qua tự động');
+});
+test('approval log captures final accepted fields only once, including retry after an uncertain append',()=>{
+ const x=env();post(x);const l=ledger(x,{onFlush:()=>{throw Error('private Spreadsheet URL');}});
+ x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k'));x.ctx.handleBankDraftCallback_(callback(x,'approve'));
+ assert.equal(l.writes(),1);assert.ok(!draft(x).state.learning.approved_at);assert.equal(draft(x).state.learning.errors[0].stage,'ledger_approval');
+ x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'retry'));const a=draft(x).state.learning.approved_at;
+ assert.ok(a);assert.equal(draft(x).state.learning.approved.amount,3000);x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'retry2'));
+ assert.equal(draft(x).state.learning.approved_at,a);assert.equal(l.writes(),1);assert.equal(draft(x).state.learning.history.length,1);
+});
+test('delete/restore are actions without inferred rejection reason; abandoned drafts never count as model errors',()=>{
+ const x=env();post(x);const original=draft(x).state,expires=original.expires;
+ assert.equal(x.ctx.bankLearnOutcome_(original,Date.now()),'chưa duyệt');assert.equal(x.ctx.bankLearnOutcome_(original,expires+1),'hết hạn, chưa duyệt');
+ x.ctx.handleBankDraftCallback_(callback(x,'delete'));assert.equal(x.ctx.bankLearnOutcome_(draft(x).state,Date.now()),'đã xóa nháp');
+ x.ctx.handleBankDraftCallback_(callback(x,'restore','',12345,'restore'));const s=draft(x).state;
+ assert.equal(s.learning.history.length,2);assert.equal(s.learning.errors.length,0);assert.equal(s.expires,expires);
+});
+test('menus, unauthorized requests and replayed updates cannot manufacture learning edits',()=>{
+ const x=env();post(x);x.ctx.handleBankDraftCallback_(callback(x,'edit'));x.ctx.handleBankDraftCallback_(callback(x,'income','',999,'wrong'));
+ assert.equal(draft(x).state.learning.history.length,0);
+ const m=reply(x,'sửa tiền 3k');x.ctx.handleBankDraftReply_(m);x.ctx.handleBankDraftReply_(m);
+ assert.equal(draft(x).state.learning.history.length,1);x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3000',12345,9999));assert.equal(draft(x).state.learning.history.length,1);
+});
+test('legacy drafts never label the first newly observed value as original model output',()=>{
+ const x=env();post(x);const d=draft(x);delete d.state.learning;x.props.setProperty(d.key,JSON.stringify(d.state));
+ x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k'));const l=draft(x).state.learning;
+ assert.equal(l.legacy,true);assert.equal(l.initial,null);assert.equal(l.history[0].fields.amount.from,40000);
+});
+test('learning history is bounded within property byte budget, detects edits beyond the visible prefix and retains initial result',()=>{
+ const x=env();post(x);const d=draft(x);d.state.original='漢'.repeat(1200);d.state.tx.description='漢'.repeat(400);x.props.setProperty(d.key,JSON.stringify(d.state));
+ for(let i=0;i<20;i++)x.ctx.handleBankDraftReply_(reply(x,'sửa nội dung '+'漢'.repeat(399)+i,12345,10000+i));
+ const s=draft(x).state;assert.ok(s.learning.history.length<=8);assert.ok(s.learning.history.length>0);assert.ok(s.learning.dropped>0);
+ assert.ok(Buffer.byteLength(x.values[d.key])<8500);assert.equal(s.learning.initial.amount,40000);assert.equal(s.expires,d.state.expires);
+});
+test('sanitized Telegram errors are recorded but not-modified is not an error',()=>{
+ const x=env({onTelegram:m=>{if(m==='editMessageText')throw Error('Telegram HTTP 429: token secret key private body');}});post(x);
+ x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k'));const l=draft(x).state.learning;assert.equal(l.errors[0].http,429);assert.ok(!JSON.stringify(l).includes('private body'));assert.ok(!JSON.stringify(l).includes('token secret'));
+ const y=env({onTelegram:m=>{if(m==='editMessageText')throw Error('message is not modified');}});post(y);y.ctx.handleBankDraftReply_(reply(y,'sửa tiền 3k'));assert.equal(draft(y).state.learning.errors.length,0);
+});
+test('banklog is owner/group/secret restricted, before ledger routing, and detailed output contains no intake key',()=>{
+ const x=env();post(x);x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k'));const id=draft(x).state.id;
+ function report(from=12345,chat=-10012345,text='/banklog'){return {message_id:900,from:{id:from},chat:{id:chat},text};}
+ let n=x.calls.length;x.ctx.handleBankLogCommand_(report(999));x.ctx.handleBankLogCommand_(report(12345,-999));assert.equal(x.calls.length,n);
+ x.ctx.doPost({parameter:{key:'wrong'},postData:{contents:JSON.stringify({message:report()})}});assert.equal(x.calls.length,n);
+ assert.equal(x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({message:report()})}}).html,'OK');assert.match(x.calls.at(-1).payload.text,/cửa sổ 48 giờ/);
+ x.ctx.handleBankLogCommand_(report(12345,-10012345,'/banklog '+id));const text=x.calls.at(-1).payload.text;
+ assert.match(text,/40\.000đ/);assert.match(text,/3\.000đ/);assert.match(text,/40000 → 3000/);assert.match(text,/Gốc/);assert.ok(text.length<=3800);assert.ok(!text.includes('a'.repeat(64)));assert.equal(x.calls.at(-1).payload.parse_mode,undefined);
+});
+test('expiry removes learning together with event; report never returns expired private contents',()=>{
+ const x=env();post(x);const d=draft(x);d.state.expires=Date.now()-1;x.props.setProperty(d.key,JSON.stringify(d.state));
+ x.ctx.handleBankLogCommand_({from:{id:12345},chat:{id:-10012345},text:'/banklog '+d.state.id});assert.match(x.calls.at(-1).payload.text,/Không tìm thấy/);
+ x.ctx.cleanupBankRelayState();assert.equal(x.values[d.key],undefined);
+});
+test('banklog paginates the entire retained window and excludes another group even in shared properties',()=>{
+ const x=env(),at=Date.now();for(let i=0;i<10;i++)post(x,request(sample(),{at:at-i}));
+ const events=Object.keys(x.values).filter(k=>k.startsWith('BANK_EVT_'));const hidden=JSON.parse(x.values[events[0]]);hidden.group='-999';hidden.id='aaaaaaaaaaaa';x.values.BANK_EVT_foreign=JSON.stringify(hidden);
+ x.ctx.handleBankLogCommand_({from:{id:12345},chat:{id:-10012345},text:'/banklog 2'});const text=x.calls.at(-1).payload.text;
+ assert.match(text,/Trang 2\/2/);assert.equal((text.match(/· VIB ·/g)||[]).length,2);assert.ok(!text.includes('aaaaaaaaaaaa'));
+});
+test('callback display errors append sanitized learning error once without altering original extraction',()=>{
+ const x=env({onTelegram:m=>{if(m==='editMessageReplyMarkup')throw Error('HTTP 403: private key');}});post(x);const initial=JSON.stringify(draft(x).state.learning.initial);
+ x.ctx.handleBankDraftCallback_(callback(x,'edit'));const s=draft(x).state;assert.equal(s.learning.errors[0].stage,'telegram_action');assert.equal(s.learning.errors[0].kind,'forbidden');
+ assert.equal(JSON.stringify(s.learning.initial),initial);assert.equal(s.learning.history.length,0);assert.ok(!JSON.stringify(s.learning).includes('private key'));
 });
