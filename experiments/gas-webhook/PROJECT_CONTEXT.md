@@ -1,6 +1,6 @@
-# PREVIEW BRANCH ONLY — MacroDroid intake 23/10/2026
+# MACRODROID PREVIEW — owner approved deployment 23/10/2026
 
-This branch experiment/macrodroid-preview-20261023 contains prepared bank relay code and mocked tests. **Not deployed/enabled, no real Telegram send or Sheets write.** Do not treat it as the active source branch. Active bot remains experiment/gas-webhook-isolated. See [BANK_RELAY_PREVIEW.md](BANK_RELAY_PREVIEW.md) for concrete diff, configuration, owner-only editable drafts, 48-hour retention, test results and remaining limitations. Owner deployment approval is pending; existing workflow hardcodes active branch and does not deploy this preview branch.
+Owner explicitly approved deploying PREVIEW to the existing active GAS. Integrate this branch into experiment/gas-webhook-isolated, verify deploy-gas-webhook-test workflow, then complete private GAS setup. At this commit deployment/configuration/live Telegram delivery have NOT yet been verified. New intake defaults disabled; PREVIEW only, no bank ledger writes. Existing manual bot entries remain unchanged. See [BANK_RELAY_PREVIEW.md](BANK_RELAY_PREVIEW.md). Runtime setup is not executed by clasp deployment.
 
 # CURRENT OPERATING HANDOFF — 2026-10-16
 
