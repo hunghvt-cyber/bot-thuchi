@@ -165,3 +165,53 @@ test('category callback routes before ledger and receipt handler; API failures r
  assert.equal(x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({callback_query:callback(x)})}}).html,'OK');
  assert.equal(draft(x).state.editing,false);assert.ok(x.calls.some(c=>c.method==='answerCallbackQuery'));
 });
+function inputReply(x,kind,value,owner=12345,id=9900){
+ const key=Object.keys(x.values).find(k=>k.startsWith('BANK_MSG_')&&JSON.parse(x.values[k]).inputKind===kind);
+ assert.ok(key);const prompt=x.calls.find(c=>c.method==='sendMessage'&&c.payload.reply_markup&&c.payload.reply_markup.force_reply);
+ return {message_id:id,chat:{id:Number(draft(x).state.group)},from:{id:owner},text:value,
+  reply_to_message:{message_id:Number(key.split('_').at(-1)),text:prompt.payload.text}};
+}
+test('draft action panel has money, content, category, direction and soft-delete buttons',()=>{
+ const x=env();post(x);const labels=x.calls[0].payload.reply_markup.inline_keyboard.flat().map(b=>b.text);
+ for(const label of ['Sửa tiền','Sửa nội dung','Đổi danh mục','Thu / Chi','Xóa nháp'])assert.ok(labels.includes(label));
+ assert.ok(!x.calls[0].payload.text.includes('Reply để sửa'));
+});
+test('money button opens selective reply prompt; bare 3k edits original draft, not ledger',()=>{
+ const x=env();post(x);x.ctx.handleBankDraftCallback_(callback(x,'money'));
+ const prompt=x.calls.find(c=>c.payload.reply_markup&&c.payload.reply_markup.force_reply);
+ assert.equal(prompt.payload.reply_markup.selective,true);assert.match(prompt.payload.text,/tg:\/\/user\?id=12345/);
+ const m=inputReply(x,'money','3k');assert.equal(x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({message:m})}}).html,'OK');
+ assert.equal(draft(x).state.tx.amount,3000);assert.equal(x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.message_id,draft(x).state.message_id);
+ x.ctx.handleBankDraftReply_(m);assert.equal(x.calls.filter(c=>c.method==='editMessageText').length,1);
+});
+test('content button accepts plain text and preserves angle brackets as text',()=>{
+ const x=env();post(x);x.ctx.handleBankDraftCallback_(callback(x,'description'));
+ x.ctx.handleBankDraftReply_(inputReply(x,'description','Mua sách <cho bé>'));
+ assert.equal(draft(x).state.tx.description,'Mua sách <cho bé>');assert.equal(draft(x).state.tx.amount,40000);
+ assert.equal(x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.parse_mode,undefined);
+});
+test('input prompt enforces owner, five-minute expiry, validation and cancellation without ledger fallthrough',()=>{
+ for(const mode of ['owner','expired','invalid','cancel']){
+  const x=env();post(x);x.ctx.handleBankDraftCallback_(callback(x,'money'));
+  const msg=inputReply(x,'money',mode==='invalid'?'không phải số':mode==='cancel'?'Hủy':'3k',mode==='owner'?999:12345);
+  const key='BANK_MSG_'+msg.chat.id+'_'+msg.reply_to_message.message_id;
+  const map=JSON.parse(x.values[key]);assert.ok(map.expires<=Date.now()+300000);
+  if(mode==='expired'){map.expires=0;x.props.setProperty(key,JSON.stringify(map));}
+  assert.equal(x.ctx.handleBankDraftReply_(msg),true);assert.equal(draft(x).state.tx.amount,40000);
+  if(mode==='cancel')assert.equal(x.values[key],undefined);
+ }
+});
+test('direction and soft-delete/restore buttons update only the owned draft',()=>{
+ const x=env();post(x);x.ctx.handleBankDraftCallback_(callback(x,'kind'));
+ assert.deepEqual(Array.from(x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.reply_markup.inline_keyboard[0],b=>b.text),['Thu','Chi']);
+ x.ctx.handleBankDraftCallback_(callback(x,'income','',12345,'income1'));assert.equal(draft(x).state.tx.direction,'Thu');
+ x.ctx.handleBankDraftCallback_(callback(x,'delete','',12345,'delete1'));assert.equal(draft(x).state.deleted,true);
+ assert.equal(x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.reply_markup.inline_keyboard[0][0].text,'Khôi phục nháp');
+ x.ctx.handleBankDraftCallback_(callback(x,'restore','',12345,'restore1'));assert.equal(draft(x).state.deleted,false);assert.equal(draft(x).state.tx.amount,40000);
+});
+test('failed input prompt releases edit lock and duplicate callback cannot spawn another prompt',()=>{
+ const x=env({onTelegram:(method,payload)=>{if(method==='sendMessage'&&payload.reply_markup&&payload.reply_markup.force_reply)throw Error('offline');}});
+ post(x);const cb=callback(x,'money');x.ctx.handleBankDraftCallback_(cb);assert.equal(draft(x).state.editing,false);
+ const count=x.calls.filter(c=>c.payload.reply_markup&&c.payload.reply_markup.force_reply).length;
+ x.ctx.handleBankDraftCallback_(cb);assert.equal(x.calls.filter(c=>c.payload.reply_markup&&c.payload.reply_markup.force_reply).length,count);
+});
