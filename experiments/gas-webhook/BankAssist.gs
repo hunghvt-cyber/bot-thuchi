@@ -46,10 +46,12 @@ function bankDetect_(event){
 }
 function bankKeyboard_(state,view){
   function button(text,action){return {text:text,callback_data:'bank:'+action+':'+state.id};}
+  if(state.recorded)return {inline_keyboard:[]};
   if(state.deleted)return {inline_keyboard:[[button('Khôi phục nháp','restore')]]};
   if(view==='type')return {inline_keyboard:[[button('Thu','income'),button('Chi','expense')],[button('Quay lại','close')]]};
-  if(!view)return {inline_keyboard:[[button('Đổi danh mục','menu'),button('Thu / Chi','kind')],
-    [button('Sửa tiền','money'),button('Sửa nội dung','description')],[button('Xóa nháp','delete')]]};
+  if(!view)return {inline_keyboard:[[button('Edit','edit'),button('Duyệt','approve')]]};
+  if(view==='edit')return {inline_keyboard:[[button('Đổi danh mục','menu'),button('Thu / Chi','kind')],
+    [button('Sửa tiền','money'),button('Sửa nội dung','description')],[button('Quay lại','close'),button('Xóa nháp','delete')]]};
   var categories=state.category_choices||FAMILY_CATEGORIES,rows=[];
   for(var i=0;i<categories.length;i+=2)rows.push(categories.slice(i,i+2).map(function(c,n){return {text:(c===state.tx.category?'✓ ':'')+c,callback_data:'bank:cat:'+state.id+':'+(i+n)};}));
   rows.push([button('Quay lại','close')]);return {inline_keyboard:rows};
@@ -64,7 +66,7 @@ function bankPromptForInput_(state,key,kind){
     JSON.stringify({eventKey:key,inputKind:kind,expires:Math.min(state.expires,Date.now()+300000)}));});
 }
 function handleBankDraftCallback_(cb){
-  var match=String(cb&&cb.data||'').match(/^bank:(menu|cat|close|kind|income|expense|money|description|delete|restore):([a-f0-9]{12})(?::(\d{1,2}))?$/);
+  var match=String(cb&&cb.data||'').match(/^bank:(edit|approve|menu|cat|close|kind|income|expense|money|description|delete|restore):([a-f0-9]{12})(?::(\d{1,2}))?$/);
   if(!match)return String(cb&&cb.data||'').indexOf('bank:')===0;
   var acknowledged=false;
   function ack(text){if(acknowledged)return;acknowledged=true;try{telegramApi_('answerCallbackQuery',{callback_query_id:cb.id,text:text});}catch(ignore){}}
@@ -77,9 +79,12 @@ function handleBankDraftCallback_(cb){
       key=map.eventKey;state=JSON.parse(p.getProperty(key)||'null');
       if(!state||state.id!==match[2]||state.expires<=Date.now()||String(state.group)!==String(msg.chat.id)||state.message_id!==msg.message_id)return 'Bản nháp không còn khả dụng.';
       if(String(state.owner)!==String(cb.from&&cb.from.id))return 'Chỉ chủ thiết bị được sửa.';
+      if(state.recorded&&match[1]!=='approve')return 'Đã ghi sổ. Reply tin giao dịch để sửa hoặc xóa.';
       if(state.deleted&&match[1]!=='restore')return 'Khôi phục bản nháp trước khi sửa.';
-      if(state.editing)return 'Đang cập nhật, thử lại sau.';
+      if(state.editing&&(!state.editing_at||Date.now()-state.editing_at<120000))return 'Đang cập nhật, thử lại sau.';
       if((state.callback_ids||[]).indexOf(String(cb.id))>=0)return 'Đã xử lý.';
+      if(match[1]==='approve'){var invalid=bankApprovalError_(state);if(invalid)return invalid;}
+      if(match[1]==='edit')view='edit';
       if(match[1]==='menu'){state.category_choices=FAMILY_CATEGORIES.slice();view=true;}
       if(match[1]==='kind')view='type';
       if(match[1]==='cat'){
@@ -89,11 +94,12 @@ function handleBankDraftCallback_(cb){
       }
       if(match[1]==='income'||match[1]==='expense'){state.tx.direction=match[1]==='income'?'Thu':'Chi';changed=true;}
       if(match[1]==='delete'||match[1]==='restore'){state.deleted=match[1]==='delete';changed=true;}
-      state.editing=true;state.callback_ids=(state.callback_ids||[]).concat(String(cb.id)).slice(-20);p.setProperty(key,JSON.stringify(state));return null;
+      state.editing=true;state.editing_at=Date.now();state.callback_ids=(state.callback_ids||[]).concat(String(cb.id)).slice(-20);p.setProperty(key,JSON.stringify(state));return null;
     });
     if(result){ack(result);return true;}
     // Dismiss Telegram's button spinner before slow message edits/prompt sends.
     ack();
+    if(match[1]==='approve'){bankApproveCallback_(cb,key,state);return true;}
     var failed=false,input=match[1]==='money'||match[1]==='description';
     try{
       if(input)bankPromptForInput_(state,key,match[1]);
