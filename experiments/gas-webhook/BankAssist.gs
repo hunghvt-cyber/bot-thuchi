@@ -66,7 +66,8 @@ function bankPromptForInput_(state,key,kind){
 function handleBankDraftCallback_(cb){
   var match=String(cb&&cb.data||'').match(/^bank:(menu|cat|close|kind|income|expense|money|description|delete|restore):([a-f0-9]{12})(?::(\d{1,2}))?$/);
   if(!match)return String(cb&&cb.data||'').indexOf('bank:')===0;
-  function ack(text){try{telegramApi_('answerCallbackQuery',{callback_query_id:cb.id,text:text});}catch(ignore){}}
+  var acknowledged=false;
+  function ack(text){if(acknowledged)return;acknowledged=true;try{telegramApi_('answerCallbackQuery',{callback_query_id:cb.id,text:text});}catch(ignore){}}
   var msg=cb.message,p=PropertiesService.getScriptProperties(),state,key,changed=false,view=false;
   if(!msg||!msg.chat){ack('Không có bản nháp.');return true;}
   try{
@@ -91,14 +92,16 @@ function handleBankDraftCallback_(cb){
       state.editing=true;state.callback_ids=(state.callback_ids||[]).concat(String(cb.id)).slice(-20);p.setProperty(key,JSON.stringify(state));return null;
     });
     if(result){ack(result);return true;}
+    // Dismiss Telegram's button spinner before slow message edits/prompt sends.
+    ack();
     var failed=false,input=match[1]==='money'||match[1]==='description';
     try{
       if(input)bankPromptForInput_(state,key,match[1]);
+      else if(!changed&&String(msg.text||'')===bankDraftText_(state))telegramApi_('editMessageReplyMarkup',{chat_id:String(state.group),message_id:state.message_id,reply_markup:bankKeyboard_(state,view)});
       else telegramApi_('editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:bankDraftText_(state),reply_markup:bankKeyboard_(state,view)});
     }catch(err){failed=!/message is not modified/i.test(String(err.message||''));}
     finally{bankLock_(function(){var latest=JSON.parse(p.getProperty(key)||'null');if(latest){latest.editing=false;p.setProperty(key,JSON.stringify(latest));}});}
-    ack(failed?(changed?'Đã lưu thay đổi; tin hiển thị chưa cập nhật.':'Chưa mở được thao tác, thử lại.'):
-      input?'Trả lời yêu cầu nhập mới của bot':state.deleted?'Đã xóa nháp':changed?'Đã cập nhật nháp':'Chọn thao tác');
-  }catch(err){ack('Chưa hoàn tất, thử lại sau.');}
+    if(failed)bankReplyNote_(msg,changed?'Đã lưu nháp: '+bankSummary_(state)+'. Tin hiển thị chưa cập nhật.':'Chưa mở được thao tác, bấm thử lại.');
+  }catch(err){if(acknowledged){try{bankReplyNote_(msg,'Chưa hoàn tất, bấm thử lại.');}catch(ignore){}}else ack('Chưa hoàn tất, thử lại sau.');}
   return true;
 }
