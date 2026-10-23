@@ -375,12 +375,12 @@ test('banklog is owner/group/secret restricted, before ledger routing, and detai
  function report(from=12345,chat=-10012345,text='/banklog'){return {message_id:900,from:{id:from},chat:{id:chat},text};}
  let n=x.calls.length;x.ctx.handleBankLogCommand_(report(999));x.ctx.handleBankLogCommand_(report(12345,-999));assert.equal(x.calls.length,n);
  x.ctx.doPost({parameter:{key:'wrong'},postData:{contents:JSON.stringify({message:report()})}});assert.equal(x.calls.length,n);
- assert.equal(x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({message:report()})}}).html,'OK');assert.match(x.calls.at(-1).payload.text,/cửa sổ 48 giờ/);
+ assert.equal(x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({message:report()})}}).html,'OK');assert.match(x.calls.at(-1).payload.text,/cửa sổ 7 ngày/);
  x.ctx.handleBankLogCommand_(report(12345,-10012345,'/banklog '+id));const text=x.calls.at(-1).payload.text;
  assert.match(text,/40\.000đ/);assert.match(text,/3\.000đ/);assert.match(text,/40000 → 3000/);assert.match(text,/Gốc/);assert.ok(text.length<=3800);assert.ok(!text.includes('a'.repeat(64)));assert.equal(x.calls.at(-1).payload.parse_mode,undefined);
 });
-test('expiry removes learning together with event; report never returns expired private contents',()=>{
- const x=env();post(x);const d=draft(x);d.state.expires=Date.now()-1;x.props.setProperty(d.key,JSON.stringify(d.state));
+test('seven-day log expiry removes learning together with event; report never returns purged-window contents',()=>{
+ const x=env();post(x);const d=draft(x);d.state.captured_at=Date.now()-7*86400000-1;d.state.created=d.state.captured_at;d.state.expires=d.state.captured_at+48*3600000;x.props.setProperty(d.key,JSON.stringify(d.state));
  x.ctx.handleBankLogCommand_({from:{id:12345},chat:{id:-10012345},text:'/banklog '+d.state.id});assert.match(x.calls.at(-1).payload.text,/Không tìm thấy/);
  x.ctx.cleanupBankRelayState();assert.equal(x.values[d.key],undefined);
 });
@@ -394,4 +394,27 @@ test('callback display errors append sanitized learning error once without alter
  const x=env({onTelegram:m=>{if(m==='editMessageReplyMarkup')throw Error('HTTP 403: private key');}});post(x);const initial=JSON.stringify(draft(x).state.learning.initial);
  x.ctx.handleBankDraftCallback_(callback(x,'edit'));const s=draft(x).state;assert.equal(s.learning.errors[0].stage,'telegram_action');assert.equal(s.learning.errors[0].kind,'forbidden');
  assert.equal(JSON.stringify(s.learning.initial),initial);assert.equal(s.learning.history.length,0);assert.ok(!JSON.stringify(s.learning).includes('private key'));
+});
+test('three-day-old draft remains in weekly learning log but cannot be approved or edited',()=>{
+ const x=env();post(x);const d=draft(x),at=Date.now()-3*86400000;d.state.captured_at=at;d.state.created=at;d.state.expires=at+48*3600000;
+ x.props.setProperty(d.key,JSON.stringify(d.state));const mapKey='BANK_MSG_'+d.state.group+'_'+d.state.message_id;
+ x.props.setProperty(mapKey,JSON.stringify({eventKey:d.key,expires:d.state.expires}));const l=ledger(x);
+ x.ctx.cleanupBankRelayState();assert.ok(x.values[d.key]);assert.equal(x.values[mapKey],undefined);
+ x.ctx.handleBankDraftCallback_(callback(x,'approve'));x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k'));assert.equal(l.writes(),0);assert.equal(draft(x).state.tx.amount,40000);
+ x.ctx.handleBankLogCommand_({from:{id:12345},chat:{id:-10012345},text:'/banklog '+d.state.id});assert.match(x.calls.at(-1).payload.text,/hết hạn, chưa duyệt/);assert.match(x.calls.at(-1).payload.text,/40\.000đ/);assert.match(x.calls.at(-1).payload.text,/Gốc/);
+});
+test('weekly retention uses original capture, never approval/edit times, and cleanup is exact at the seven-day boundary',()=>{
+ const x=env();post(x);const d=draft(x),s=d.state;const expires=x.ctx.bankLogExpires_(s);assert.equal(expires,s.captured_at+7*86400000);
+ s.learning.approved_at=Date.now()+10*86400000;s.editing_at=s.learning.approved_at;assert.equal(x.ctx.bankLogExpires_(s),expires);
+ x.props.setProperty(d.key,JSON.stringify(s));x.ctx.bankClean_(x.props,expires-1);assert.ok(x.values[d.key]);x.ctx.bankClean_(x.props,expires);assert.equal(x.values[d.key],undefined);
+});
+test('pre-upgrade events without a log deadline gain the same seven-day window without inventing a model baseline',()=>{
+ const x=env();post(x);const d=draft(x);delete d.state.captured_at;delete d.state.learning;d.state.created=Date.now()-4*86400000;d.state.expires=d.state.created+48*3600000;
+ x.props.setProperty(d.key,JSON.stringify(d.state));x.ctx.cleanupBankRelayState();assert.ok(x.values[d.key]);
+ x.ctx.handleBankLogCommand_({from:{id:12345},chat:{id:-10012345},text:'/banklog '+d.state.id});assert.match(x.calls.at(-1).payload.text,/nháp cũ/);assert.equal(JSON.parse(x.values[d.key]).learning,undefined);
+});
+test('a week of retained logs does not change intake retry limits, authentication or weekly report owner checks',()=>{
+ const x=env();post(x);const old=Date.now()-3*86400000;assert.equal(post(x,request(sample(),{at:old})).status,'expired_or_future');
+ const n=x.calls.length;x.ctx.handleBankLogCommand_({from:{id:999},chat:{id:-10012345},text:'/banklog'});assert.equal(x.calls.length,n);
+ x.ctx.handleBankLogCommand_({from:{id:12345},chat:{id:-10012345},text:'/banklog'});assert.match(x.calls.at(-1).payload.text,/cửa sổ 7 ngày/);
 });
