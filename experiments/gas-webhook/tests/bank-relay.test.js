@@ -141,7 +141,7 @@ function callback(x,action='menu',index='',owner=12345,id='callback1'){
 test('category button lists all 14 existing categories, chooses one and preserves amount',()=>{
  const x=env();vm.runInContext(fs.readFileSync(root+'FamilyConfig.gs','utf8'),x.ctx);post(x);
  assert.equal(x.calls[0].payload.reply_markup.inline_keyboard[0][0].text,'Đổi danh mục');
- x.ctx.handleBankDraftCallback_(callback(x));const menu=x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.reply_markup.inline_keyboard;
+ x.ctx.handleBankDraftCallback_(callback(x));const menu=x.calls.filter(c=>c.method==='editMessageReplyMarkup').at(-1).payload.reply_markup.inline_keyboard;
  const choices=menu.flat().filter(c=>c.callback_data.startsWith('bank:cat:'));assert.equal(choices.length,14);
  assert.deepEqual(Array.from(choices,c=>c.text.replace(/^✓ /,'')).sort(),Array.from(x.ctx.FAMILY_CATEGORIES).sort());
  const i=x.ctx.FAMILY_CATEGORIES.indexOf('Con cái');const cb=callback(x,'cat',i,12345,'choose1');
@@ -161,7 +161,7 @@ test('category callbacks reject wrong owner/chat/token/expired/deleted and forge
  const x=env();post(x);x.ctx.doPost({parameter:{key:'wrong'},postData:{contents:JSON.stringify({callback_query:callback(x)})}});assert.equal(x.calls.length,1);
 });
 test('category callback routes before ledger and receipt handler; API failures release edit lock',()=>{
- const x=env({onTelegram:m=>{if(m==='editMessageText')throw Error('offline');}});post(x);
+ const x=env({onTelegram:m=>{if(m==='editMessageText'||m==='editMessageReplyMarkup')throw Error('offline');}});post(x);
  assert.equal(x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({callback_query:callback(x)})}}).html,'OK');
  assert.equal(draft(x).state.editing,false);assert.ok(x.calls.some(c=>c.method==='answerCallbackQuery'));
 });
@@ -203,7 +203,7 @@ test('input prompt enforces owner, five-minute expiry, validation and cancellati
 });
 test('direction and soft-delete/restore buttons update only the owned draft',()=>{
  const x=env();post(x);x.ctx.handleBankDraftCallback_(callback(x,'kind'));
- assert.deepEqual(Array.from(x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.reply_markup.inline_keyboard[0],b=>b.text),['Thu','Chi']);
+ assert.deepEqual(Array.from(x.calls.filter(c=>c.method==='editMessageReplyMarkup').at(-1).payload.reply_markup.inline_keyboard[0],b=>b.text),['Thu','Chi']);
  x.ctx.handleBankDraftCallback_(callback(x,'income','',12345,'income1'));assert.equal(draft(x).state.tx.direction,'Thu');
  x.ctx.handleBankDraftCallback_(callback(x,'delete','',12345,'delete1'));assert.equal(draft(x).state.deleted,true);
  assert.equal(x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.reply_markup.inline_keyboard[0][0].text,'Khôi phục nháp');
@@ -214,4 +214,25 @@ test('failed input prompt releases edit lock and duplicate callback cannot spawn
  post(x);const cb=callback(x,'money');x.ctx.handleBankDraftCallback_(cb);assert.equal(draft(x).state.editing,false);
  const count=x.calls.filter(c=>c.payload.reply_markup&&c.payload.reply_markup.force_reply).length;
  x.ctx.handleBankDraftCallback_(cb);assert.equal(x.calls.filter(c=>c.payload.reply_markup&&c.payload.reply_markup.force_reply).length,count);
+});
+
+test('valid button acknowledges once before message edits, keyboard updates or input prompts',()=>{
+ for(const action of ['menu','kind','close','income','money','description','delete']){
+  const x=env();post(x);const before=x.calls.length;x.ctx.handleBankDraftCallback_(callback(x,action));
+  const calls=x.calls.slice(before);assert.equal(calls[0].method,'answerCallbackQuery');
+  assert.equal(calls.filter(c=>c.method==='answerCallbackQuery').length,1);
+  assert.equal(draft(x).state.editing,false);
+ }
+});
+test('menu navigation edits only keyboard, keeps actual transaction untouched',()=>{
+ const x=env();post(x);const tx=JSON.stringify(draft(x).state.tx);
+ for(const [i,action] of ['menu','kind','close'].entries())x.ctx.handleBankDraftCallback_(callback(x,action,'',12345,'navigate'+i));
+ assert.equal(x.calls.filter(c=>c.method==='editMessageReplyMarkup').length,3);
+ assert.equal(x.calls.filter(c=>c.method==='editMessageText').length,0);assert.equal(JSON.stringify(draft(x).state.tx),tx);
+});
+test('early acknowledgement never hides subsequent API failure and legacy text still refreshes',()=>{
+ const x=env({onTelegram:m=>{if(m==='editMessageReplyMarkup')throw Error('offline');}});post(x);x.ctx.handleBankDraftCallback_(callback(x,'menu'));
+ assert.match(x.calls.at(-1).payload.text,/Chưa mở được thao tác/);assert.equal(draft(x).state.editing,false);
+ const y=env();post(y);const cb=callback(y,'menu');cb.message.text='🧪 BANK_DRAFT_V1\nLegacy long notification';
+ y.ctx.handleBankDraftCallback_(cb);assert.equal(y.calls.filter(c=>c.method==='editMessageText').length,1);
 });
