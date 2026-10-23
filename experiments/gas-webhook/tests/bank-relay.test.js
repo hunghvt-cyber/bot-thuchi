@@ -20,7 +20,7 @@ function env(options={}){
   getMainSpreadsheetId:()=>{throw Error('UNEXPECTED_SPREADSHEET_ID');},getFamilyGroupId:()=>values.FAMILY_GROUP_ID
  };
  vm.createContext(ctx);
- for(const f of ['BankNotifications.gs','BankRelay.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
+ for(const f of ['BankNotifications.gs','BankAssist.gs','BankRelay.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
  return {ctx,values,calls,props};
 }
 function sample(pkg='com.vib.myvib2',title='Thông báo giao dịch',text='Tài khoản •••• 1111, phát sinh -40,000 ₫ vào lúc 11:48 22/10/2026. Số dư: 5,581,643 ₫'){return {package_name:pkg,title,text};}
@@ -100,4 +100,68 @@ test('actual edit failure exposes saved amount without claiming display success 
  assert.equal(draft(x).state.last_edit_error.kind,'rate_limited');assert.equal(draft(x).state.last_edit_error.http,429);
  assert.match(x.calls.at(-1).payload.text,/Đã lưu nháp: Chi 3\.000đ/);assert.match(x.calls.at(-1).payload.text,/Tin gốc chưa xác minh/);
  assert.ok(!x.calls.at(-1).payload.text.includes('private payload'));
+});
+function aiSample(){return sample('com.example.newbank','Biến động số dư','Giao dịch ghi nợ -25,000 VND. Số dư 99,000 VND');}
+function aiResult(){return {kind:'transaction',amount:25000,amount_text:'25,000',amount_context:'Giao dịch ghi nợ -25,000 VND',direction:'Chi',direction_context:'ghi nợ -25,000 VND',currency:'VND',source:'Bank mới',description:'Không rõ mục đích',category:'Đi chợ'};}
+function withAI(x,result=aiResult()){
+ const usage=[];x.ctx.sharedGeminiQuota_=(kind,max,locked)=>usage.push({kind,max,locked});
+ x.ctx.sharedGemini_=()=>JSON.stringify(result);return usage;
+}
+test('new phone-selected app uses Gemini with grounded amount; missing purpose stays Khác',()=>{
+ const x=env(),usage=withAI(x);assert.equal(post(x,request(aiSample())).status,'sent');
+ assert.equal(draft(x).state.tx.amount,25000);assert.equal(draft(x).state.tx.source,'Bank mới');
+ assert.equal(draft(x).state.tx.description,'Không rõ mục đích');assert.equal(draft(x).state.tx.category,'Khác');
+ assert.deepEqual(usage,[{kind:'BANK',max:50,locked:false}]);
+ assert.match(x.calls[0].payload.text,/Chi 25\.000đ/);
+});
+test('known local format avoids Gemini and uses unknown-purpose default',()=>{
+ const x=env(),usage=withAI(x);post(x);assert.equal(usage.length,0);assert.equal(draft(x).state.tx.description,'Không rõ mục đích');
+});
+test('Gemini malformed/ungrounded/balance/nonVND/directionless amounts become review, not guesses',()=>{
+ for(const patch of [{amount:99000},{amount_context:'Số dư 99,000 VND',amount_text:'99,000',amount:99000},{amount_context:'made up25,000'},
+ {currency:'USD'},{direction:'?'},{direction_context:'invented +25,000'},{amount_text:'5,000',amount:5000}]){
+  const x=env();withAI(x,{...aiResult(),...patch});post(x,request(aiSample()));assert.equal(draft(x).state.tx.status,'review');assert.ok(!draft(x).state.tx.amount);
+ }
+ const x=env();withAI(x);x.ctx.sharedGemini_=()=>'{bad';assert.equal(post(x,request(aiSample())).status,'sent');assert.equal(draft(x).state.tx.status,'review');
+});
+test('authentication and dedupe precede Gemini including concurrent retry',()=>{
+ const x=env(),e=request(aiSample()),usage=withAI(x);let duplicate;
+ x.ctx.sharedGemini_=()=>{duplicate=post(x,e);return JSON.stringify(aiResult());};
+ assert.equal(post(x,e).status,'sent');assert.equal(duplicate.status,'pending');assert.equal(post(x,e).status,'duplicate_sent');assert.equal(usage.length,1);
+ const y=env(),none=withAI(y);assert.equal(post(y,request(aiSample(),{key:'wrong'})).status,'unauthorized');assert.equal(none.length,0);
+});
+test('AI nontransactions do not send; quota failure creates editable review without losing event',()=>{
+ const x=env(),e=request(aiSample()),usage=withAI(x,{kind:'other'});assert.equal(post(x,e).status,'ignored');assert.equal(post(x,e).status,'ignored');assert.equal(x.calls.length,0);assert.equal(usage.length,1);
+ const y=env();withAI(y);y.ctx.sharedGeminiQuota_=()=>{throw Error('quota');};post(y,request(aiSample()));assert.equal(draft(y).state.tx.status,'review');assert.equal(draft(y).state.status,'sent');
+});
+function callback(x,action='menu',index='',owner=12345,id='callback1'){
+ const s=draft(x).state;return {id,from:{id:owner},data:'bank:'+action+':'+s.id+(index!==''?':'+index:''),
+  message:{message_id:s.message_id,chat:{id:Number(s.group)},text:x.ctx.bankDraftText_(s)}};
+}
+test('category button lists all 14 existing categories, chooses one and preserves amount',()=>{
+ const x=env();vm.runInContext(fs.readFileSync(root+'FamilyConfig.gs','utf8'),x.ctx);post(x);
+ assert.equal(x.calls[0].payload.reply_markup.inline_keyboard[0][0].text,'Đổi danh mục');
+ x.ctx.handleBankDraftCallback_(callback(x));const menu=x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.reply_markup.inline_keyboard;
+ const choices=menu.flat().filter(c=>c.callback_data.startsWith('bank:cat:'));assert.equal(choices.length,14);
+ assert.deepEqual(Array.from(choices,c=>c.text.replace(/^✓ /,'')).sort(),Array.from(x.ctx.FAMILY_CATEGORIES).sort());
+ const i=x.ctx.FAMILY_CATEGORIES.indexOf('Con cái');const cb=callback(x,'cat',i,12345,'choose1');
+ x.ctx.handleBankDraftCallback_(cb);assert.equal(draft(x).state.tx.category,'Con cái');assert.equal(draft(x).state.tx.amount,40000);
+ assert.match(x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.text,/Con cái/);
+ const edits=x.calls.filter(c=>c.method==='editMessageText').length;x.ctx.handleBankDraftCallback_(cb);assert.equal(x.calls.filter(c=>c.method==='editMessageText').length,edits);
+});
+test('category callbacks reject wrong owner/chat/token/expired/deleted and forged webhook secret',()=>{
+ for(const variant of ['owner','chat','token','expired','deleted','index']){
+  const x=env();post(x);const cb=callback(x,variant==='index'?'cat':'menu',variant==='index'?99:'');
+  if(variant==='owner')cb.from.id=999;
+  if(variant==='chat')cb.message.chat.id=-999;
+  if(variant==='token')cb.data='bank:menu:aaaaaaaaaaaa';
+  if(variant==='expired'||variant==='deleted'){const d=draft(x);d.state[variant==='expired'?'expires':'deleted']=variant==='expired'?0:true;x.props.setProperty(d.key,JSON.stringify(d.state));}
+  x.ctx.handleBankDraftCallback_(cb);assert.equal(x.calls.filter(c=>c.method==='editMessageText').length,0);
+ }
+ const x=env();post(x);x.ctx.doPost({parameter:{key:'wrong'},postData:{contents:JSON.stringify({callback_query:callback(x)})}});assert.equal(x.calls.length,1);
+});
+test('category callback routes before ledger and receipt handler; API failures release edit lock',()=>{
+ const x=env({onTelegram:m=>{if(m==='editMessageText')throw Error('offline');}});post(x);
+ assert.equal(x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({callback_query:callback(x)})}}).html,'OK');
+ assert.equal(draft(x).state.editing,false);assert.ok(x.calls.some(c=>c.method==='answerCallbackQuery'));
 });
