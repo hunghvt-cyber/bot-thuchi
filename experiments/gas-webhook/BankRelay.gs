@@ -62,12 +62,21 @@ function bankDraftText_(state){
   return BANK_DRAFT_MARKER_+(state.deleted?' — ĐÃ XÓA':'')+'\n'+bankSummary_(state)+'\n'+
     (description?description.slice(0,100)+'\n':'')+'Chưa ghi Sheets · Nút → Dán → nhập → Gửi';
 }
+/** Opt-in file-spool ACK; v1 JSON clients remain unchanged. */
+function bankRelayAck_(e,value){
+  if(!e||!e.parameter||e.parameter.ack!=='2')return bankJson_(value);
+  var status=String(value.status||'invalid_request');
+  if(!/^(sent|duplicate_sent|ignored|pending|uncertain|unauthorized|expired_or_future|disabled|not_configured|bank_busy|bank_capacity|invalid_request)$/.test(status))status='invalid_request';
+  var raw=String(e.postData&&e.postData.contents||'');
+  return ContentService.createTextOutput('BANK-ACK-2\n'+bankDigest_(raw)+'\n'+status+'\nEND_BANK_ACK_2\n').setMimeType(ContentService.MimeType.TEXT);
+}
 function bankRelayPost_(e){
   var cfg,event,key,state;
+  function reply(value){return bankRelayAck_(e,value);}
   try{
     cfg=bankConfig_();event=bankReadEnvelope_(e);
-    if(!bankEqual_(event.key,cfg.key))return bankJson_({ok:false,status:'unauthorized'});
-    var now=Date.now();if(event.captured_at>now+300000||event.captured_at+BANK_TTL_<=now)return bankJson_({ok:false,status:'expired_or_future'});
+    if(!bankEqual_(event.key,cfg.key))return reply({ok:false,status:'unauthorized'});
+    var now=Date.now();if(event.captured_at>now+300000||event.captured_at+BANK_TTL_<=now)return reply({ok:false,status:'expired_or_future'});
     var tx;
     // Exact request identity includes receipt time, source, title and complete content; never amount-only.
     key='BANK_EVT_'+bankDigest_([event.device,event.captured_at,event.package_name,event.title,event.text].join('\n'));
@@ -79,10 +88,10 @@ function bankRelayPost_(e){
       state={id:Utilities.getUuid().replace(/-/g,'').slice(0,12),status:'pending',created:now,captured_at:event.captured_at,expires:event.captured_at+BANK_TTL_,group:cfg.group,owner:cfg.owner,tx:null,original:(event.title+'\n'+event.text).slice(0,1200)};
       cfg.props.setProperty(key,JSON.stringify(state));return {state:state};
     });
-    if(claimed.existing)return bankJson_({ok:claimed.existing.status==='sent'||claimed.existing.status==='ignored',status:claimed.existing.status==='sent'?'duplicate_sent':claimed.existing.status,event_id:claimed.existing.id});
+    if(claimed.existing)return reply({ok:claimed.existing.status==='sent'||claimed.existing.status==='ignored',status:claimed.existing.status==='sent'?'duplicate_sent':claimed.existing.status,event_id:claimed.existing.id});
     state=claimed.state;
     tx=bankDetect_(event);state.tx=tx;bankLearnStart_(state,tx);
-    if(tx.status==='ignored'){state.status='ignored';bankLock_(function(){cfg.props.setProperty(key,JSON.stringify(state));});return bankJson_({ok:true,status:'ignored',reason:tx.reason});}
+    if(tx.status==='ignored'){state.status='ignored';bankLock_(function(){cfg.props.setProperty(key,JSON.stringify(state));});return reply({ok:true,status:'ignored',reason:tx.reason});}
     bankLock_(function(){cfg.props.setProperty(key,JSON.stringify(state));});
     try{
       var sent=telegramApi_('sendMessage',{chat_id:String(cfg.group),text:bankDraftText_(state),reply_markup:bankKeyboard_(state,false)});
@@ -90,13 +99,13 @@ function bankRelayPost_(e){
       bankLock_(function(){state.status='sent';state.message_id=sent.result.message_id;
         cfg.props.setProperty(key,JSON.stringify(state));
         cfg.props.setProperty('BANK_MSG_'+cfg.group+'_'+state.message_id,JSON.stringify({eventKey:key,expires:state.expires}));});
-      return bankJson_({ok:true,status:'sent',event_id:state.id,message_id:state.message_id});
+      return reply({ok:true,status:'sent',event_id:state.id,message_id:state.message_id});
     }catch(sendError){
       // Telegram may have accepted the request. Never blindly resend after ambiguous failure.
       try{bankLock_(function(){var s=JSON.parse(cfg.props.getProperty(key)||'null');if(s&&s.status!=='sent'){s.status='uncertain';bankLearnError_(s,'telegram_send',sendError);cfg.props.setProperty(key,JSON.stringify(s));}});}catch(ignore){}
-      return bankJson_({ok:false,status:'uncertain',event_id:state.id});
+      return reply({ok:false,status:'uncertain',event_id:state.id});
     }
-  }catch(err){return bankJson_({ok:false,status:/^(disabled|not_configured|bank_busy|bank_capacity)$/.test(err.message)?err.message:'invalid_request'});}
+  }catch(err){return reply({ok:false,status:/^(disabled|not_configured|bank_busy|bank_capacity)$/.test(err.message)?err.message:'invalid_request'});}
 }
 function bankReplyNote_(msg,text){telegramApi_('sendMessage',{chat_id:String(msg.chat.id),reply_to_message_id:msg.message_id,text:BANK_DRAFT_MARKER_+'\n'+text+'\nChưa ghi Sheets.'});}
 function handleBankDraftReply_(msg){
