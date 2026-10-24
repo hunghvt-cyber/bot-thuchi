@@ -39,27 +39,39 @@ function bankCommit_(key,actor){
 function bankApprovedText_(state){
   return (state.ledger_status==='DELETED'?'✅ Giao dịch đã xóa':'✅ Đã ghi sổ')+'\n'+bankSummary_(state)+'\n'+String(state.tx.description||'Không rõ mục đích').replace(/\s+/g,' ').slice(0,100)+'\n#'+state.ledger_id.slice(0,8);
 }
+function bankBindConfirmation_(saved,messageId){
+  bankLock_(function(){
+    var sh=familySheet_(),last=sh.getLastRow(),rows=last>1?sh.getRange(2,13,last-1,1).getValues():[];
+    for(var i=0;i<rows.length;i++)if(String(rows[i][0])===saved.ledger_id){sh.getRange(i+2,17).setValue(String(messageId));break;}
+  });
+}
 function bankApproveCallback_(cb,key,state){
-  var saved;
+  var saved,receiptId;
   try{saved=bankCommit_(key,cb.from);}catch(err){
     bankLock_(function(){var p=PropertiesService.getScriptProperties(),s=JSON.parse(p.getProperty(key)||'null');if(s){s.editing=false;bankLearnError_(s,'ledger_approval',err);p.setProperty(key,JSON.stringify(s));}});
-    telegramApi_('sendMessage',{chat_id:String(state.group),reply_to_message_id:state.message_id,
+    telegramApi_('sendMessage',{chat_id:String(state.group),reply_to_message_id:cb.edit_reply_id||state.message_id,
       text:BANK_DRAFT_MARKER_+'\nChưa xác minh ghi sổ. Bấm Duyệt lại để kiểm tra; hệ thống không ghi lặp cùng nháp.'});return;
+  }
+  // Submitted text needs a fresh acknowledgement beside that reply, not only an edit above.
+  if(cb.edit_reply_id){
+    try{var receipt=telegramApi_('sendMessage',{chat_id:String(saved.group),reply_to_message_id:cb.edit_reply_id,
+      text:'✅ Đã ghi Sheets\n'+bankSummary_(saved)+'\n#'+saved.ledger_id.slice(0,8)});receiptId=receipt.result&&receipt.result.message_id;}
+    catch(err){bankLearnStoredError_(key,'telegram_edit_receipt',err);}
   }
   try{telegramApi_('editMessageText',{chat_id:String(saved.group),message_id:saved.message_id,text:bankApprovedText_(saved),reply_markup:{inline_keyboard:[]}});}
   catch(err){if(!/message is not modified/i.test(String(err.message||''))){
     bankLearnStoredError_(key,'telegram_confirmation',err);
-    var sent=telegramApi_('sendMessage',{chat_id:String(saved.group),reply_to_message_id:saved.message_id,text:bankApprovedText_(saved)});
-    if(sent.result&&sent.result.message_id)bankLock_(function(){
-      var sh=familySheet_(),last=sh.getLastRow(),rows=last>1?sh.getRange(2,13,last-1,1).getValues():[];
-      for(var i=0;i<rows.length;i++)if(String(rows[i][0])===saved.ledger_id){sh.getRange(i+2,17).setValue(String(sent.result.message_id));break;}
-    });
+    // A visible reply receipt already confirms success; do not send another duplicate notice.
+    if(!receiptId)try{var sent=telegramApi_('sendMessage',{chat_id:String(saved.group),reply_to_message_id:saved.message_id,text:bankApprovedText_(saved)});receiptId=sent.result&&sent.result.message_id;}
+    catch(sendError){bankLearnStoredError_(key,'telegram_confirmation_fallback',sendError);}
   }}
+  if(receiptId)try{bankBindConfirmation_(saved,receiptId);}catch(bindError){bankLearnStoredError_(key,'telegram_confirmation_binding',bindError);}
+  return saved;
 }
 
 /** Owner submitted a valid field correction: it now carries approval as requested. */
-function bankAutoCommitAfterEdit_(actor,key,state,beforeCommit){
+function bankAutoCommitAfterEdit_(actor,key,state,beforeCommit,replyMessageId){
   if(bankApprovalError_(state))return false;
   if(beforeCommit)beforeCommit();
-  bankApproveCallback_({from:actor},key,state);return true;
+  bankApproveCallback_({from:actor,edit_reply_id:replyMessageId},key,state);return true;
 }

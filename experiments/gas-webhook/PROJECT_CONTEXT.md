@@ -1,3 +1,7 @@
+# BANK EDIT REPLY RECEIPTS — 24/10/2026
+
+Owner missed success because only an older original message was edited above the prompt/reply. After a valid bank text correction is committed/verified, a fresh concise “✅ Đã ghi Sheets” reply is now sent under the user input before refreshing the original confirmation. Its BotMessageId is bound in the existing ledger; original TelegramMessageId remains for reply editing. No additional transaction row/schema/macro/config change. Button-based confirmations remain in place only. Ambiguous ledger failure produces no success receipt; already verified writes remain committed even if Telegram/binding fails, with sanitized log errors and no false request to repeat the financial entry. 111 mock/static tests pass. User example original already displayed the submitted description with “Đã ghi sổ”; assistant did not independently inspect the live Sheet. See BANK_EDIT_RECEIPT.md.
+
 # BANK EDIT COMMITS + READ-ONLY MENUS — 24/10/2026
 
 Owner says batching is still slow and explicitly requests edits to write Sheets like Duyệt. A submitted valid amount/content/category/Thu-Chi correction now approves via the existing locked/deduped bankCommit_ when required fields are complete, including explicit unchanged-value submissions. Opening Edit/menu/prompt, Back, Delete or Restore does not approve. Incomplete edits stay drafts; invalid/unauthorized/expired edits cannot write. Prompts disclose edit-and-record behavior. After recording, existing ledger reply edits remain; stale draft actions cannot mutate it.
