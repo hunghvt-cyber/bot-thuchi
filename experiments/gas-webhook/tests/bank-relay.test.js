@@ -590,3 +590,19 @@ test('bankbuttons refreshes an existing latest message without writing transacti
  const update=x.calls.find(c=>c.method==='editMessageReplyMarkup');assert.ok(update);assert.equal(update.payload.message_id,draft(x).state.message_id);
  assert.equal(update.payload.reply_markup.inline_keyboard.flat().filter(b=>b.copy_text).length,4);assert.equal(x.stats.writes,writes);assert.equal(x.stats.locks,locks);
 });
+
+
+test('opt-in spool ACK binds the exact UTF8 request and retains existing v1 JSON response',()=>{
+ const x=env(),e=request();e.parameter={intake:'macrodroid',ack:'2'};
+ const hash=crypto.createHash('sha256').update(e.postData.contents).digest('hex');
+ assert.equal(x.ctx.doPost(e).text,'BANK-ACK-2\n'+hash+'\nsent\nEND_BANK_ACK_2\n');
+ assert.equal(x.ctx.doPost(e).text,'BANK-ACK-2\n'+hash+'\nduplicate_sent\nEND_BANK_ACK_2\n');
+ assert.equal(x.calls.filter(c=>c.method==='sendMessage').length,1);
+ const y=env(),bad=request(sample(),{key:'wrong'});bad.parameter={intake:'macrodroid',ack:'2'};
+ assert.match(y.ctx.doPost(bad).text,/\nunauthorized\n/);assert.equal(y.calls.length,0);
+ assert.equal(post(env()).status,'sent');
+});
+test('spool uncertain ACK and its replay never resend Telegram or write Sheets',()=>{
+ const x=env({onTelegram:()=>{throw Error('timeout');}}),e=request();e.parameter={intake:'macrodroid',ack:'2'};
+ assert.match(x.ctx.doPost(e).text,/\nuncertain\n/);assert.match(x.ctx.doPost(e).text,/\nuncertain\n/);assert.equal(x.calls.length,1);
+});
