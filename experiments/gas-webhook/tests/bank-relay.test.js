@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const root=__dirname+'/../';
 function env(options={}){
  const values={BANK_RELAY_ENABLED:'YES',BANK_RELAY_MODE:'PREVIEW',BANK_RELAY_KEY:'a'.repeat(64),BANK_RELAY_OWNER_ID:'12345',BANK_RELAY_VERIFIED:'YES',FAMILY_GROUP_ID:'-10012345',ENABLE_FAMILY_WEBHOOK:'YES',RECEIPT_WEBHOOK_SECRET:'telegram-secret',...options.props};
- const calls=[];let locked=false,seq=100;
+ const calls=[],batches=[];let locked=false,seq=100;
  const props={getProperty:k=>values[k]??null,setProperty:(k,v)=>{values[k]=v;return props;},deleteProperty:k=>delete values[k],getProperties:()=>({...values})};
  const ctx={Date,JSON,Number,String,Error,console,
   PropertiesService:{getScriptProperties:()=>props},
@@ -19,9 +19,10 @@ function env(options={}){
   familyResetCallback_:()=>{throw Error('UNEXPECTED_CALLBACK');},
   getMainSpreadsheetId:()=>{throw Error('UNEXPECTED_SPREADSHEET_ID');},getFamilyGroupId:()=>values.FAMILY_GROUP_ID
  };
+ ctx.telegramCallbackUi_=(callbackId,method,payload)=>{batches.push({callbackId,method,payload});if(options.onBatch)options.onBatch(method,payload);try{ctx.telegramApi_('answerCallbackQuery',{callback_query_id:callbackId});}catch(ignore){}return ctx.telegramApi_(method,payload);};
  vm.createContext(ctx);
  for(const f of ['BankNotifications.gs','BankAssist.gs','BankRelay.gs','BankCommit.gs','BankLearning.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
- return {ctx,values,calls,props};
+ return {ctx,values,calls,props,batches};
 }
 function sample(pkg='com.vib.myvib2',title='Thông báo giao dịch',text='Tài khoản •••• 1111, phát sinh -40,000 ₫ vào lúc 11:48 22/10/2026. Số dư: 5,581,643 ₫'){return {package_name:pkg,title,text};}
 function fee(sign='-'){return sample('com.vnpay.bidv','Thông báo BIDV','Thời gian giao dịch: 05:24 23/10/2026\nTài khoản thanh toán: 1111222233\nSố tiền GD: '+sign+'5,500 VND\nNội dung giao dịch: THU PHI QLTK T10/2026');}
@@ -417,4 +418,23 @@ test('a week of retained logs does not change intake retry limits, authenticatio
  const x=env();post(x);const old=Date.now()-3*86400000;assert.equal(post(x,request(sample(),{at:old})).status,'expired_or_future');
  const n=x.calls.length;x.ctx.handleBankLogCommand_({from:{id:999},chat:{id:-10012345},text:'/banklog'});assert.equal(x.calls.length,n);
  x.ctx.handleBankLogCommand_({from:{id:12345},chat:{id:-10012345},text:'/banklog'});assert.match(x.calls.at(-1).payload.text,/cửa sổ 7 ngày/);
+});
+test('all authorized menu, field and input buttons use one callback/UI batch and retain timing without ledger access',()=>{
+ for(const [i,action] of ['edit','menu','kind','close','income','expense','money','description','delete'].entries()){
+  const x=env();post(x);x.ctx.handleBankDraftCallback_(callback(x,action,'',12345,'batch'+i));
+  assert.equal(x.batches.length,1,action);assert.equal(x.batches[0].callbackId,'batch'+i);
+  assert.equal(x.calls.filter(c=>c.method==='answerCallbackQuery').length,1);assert.equal(draft(x).state.last_ui_timing.mode,'batch');
+  assert.equal(draft(x).state.last_ui_timing.action,action);assert.ok(draft(x).state.last_ui_timing.telegram_ms>=0);assert.equal(draft(x).state.editing,false);
+ }
+});
+test('invalid/unauthorized/duplicate callbacks cannot dispatch a UI batch; approval remains separate and idempotent',()=>{
+ const x=env();post(x);x.ctx.handleBankDraftCallback_(callback(x,'edit','',999,'wrong'));assert.equal(x.batches.length,0);
+ const cb=callback(x,'edit');x.ctx.handleBankDraftCallback_(cb);x.ctx.handleBankDraftCallback_(cb);assert.equal(x.batches.length,1);
+ const l=ledger(x);x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'approve'));assert.equal(l.writes(),1);assert.equal(x.batches.length,1);
+});
+test('ambiguous input batch timeout never automatically resends a prompt and always releases UI claim',()=>{
+ const x=env({onBatch:()=>{throw Error('batch transport timeout');}});post(x);const cb=callback(x,'money');x.ctx.handleBankDraftCallback_(cb);
+ assert.equal(x.batches.length,1);assert.equal(x.calls.filter(c=>c.payload.reply_markup&&c.payload.reply_markup.force_reply).length,0);
+ assert.equal(draft(x).state.editing,false);assert.equal(draft(x).state.learning.errors.at(-1).stage,'telegram_action');
+ x.ctx.handleBankDraftCallback_(cb);assert.equal(x.batches.length,1);
 });

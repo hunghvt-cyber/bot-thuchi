@@ -56,11 +56,12 @@ function bankKeyboard_(state,view){
   for(var i=0;i<categories.length;i+=2)rows.push(categories.slice(i,i+2).map(function(c,n){return {text:(c===state.tx.category?'✓ ':'')+c,callback_data:'bank:cat:'+state.id+':'+(i+n)};}));
   rows.push([button('Quay lại','close')]);return {inline_keyboard:rows};
 }
-function bankPromptForInput_(state,key,kind){
+function bankPromptForInput_(state,key,kind,callbackId){
   var money=kind==='money',text=money?'nhập số tiền mới, ví dụ 50k hoặc 50.000.':'nhập nội dung mới.';
-  var sent=telegramApi_('sendMessage',{chat_id:String(state.group),parse_mode:'HTML',
+  var payload={chat_id:String(state.group),parse_mode:'HTML',
     text:BANK_DRAFT_MARKER_+'\n<a href="tg://user?id='+state.owner+'">Đại ca</a>, '+text+'\nChưa ghi Sheets · yêu cầu hết hạn sau 5 phút.',
-    reply_markup:{force_reply:true,selective:true,input_field_placeholder:money?'Ví dụ: 50k':'Nội dung mới'}});
+    reply_markup:{force_reply:true,selective:true,input_field_placeholder:money?'Ví dụ: 50k':'Nội dung mới'}};
+  var sent=callbackId?telegramCallbackUi_(callbackId,'sendMessage',payload):telegramApi_('sendMessage',payload);
   if(!sent.result||!sent.result.message_id)throw Error('input_prompt_failed');
   bankLock_(function(){PropertiesService.getScriptProperties().setProperty('BANK_MSG_'+state.group+'_'+sent.result.message_id,
     JSON.stringify({eventKey:key,inputKind:kind,expires:Math.min(state.expires,Date.now()+300000)}));});
@@ -68,7 +69,7 @@ function bankPromptForInput_(state,key,kind){
 function handleBankDraftCallback_(cb){
   var match=String(cb&&cb.data||'').match(/^bank:(edit|approve|menu|cat|close|kind|income|expense|money|description|delete|restore):([a-f0-9]{12})(?::(\d{1,2}))?$/);
   if(!match)return String(cb&&cb.data||'').indexOf('bank:')===0;
-  var acknowledged=false;
+  var acknowledged=false,started=Date.now(),uiStarted;
   function ack(text){if(acknowledged)return;acknowledged=true;try{telegramApi_('answerCallbackQuery',{callback_query_id:cb.id,text:text});}catch(ignore){}}
   var msg=cb.message,p=PropertiesService.getScriptProperties(),state,key,changed=false,view=false;
   if(!msg||!msg.chat){ack('Không có bản nháp.');return true;}
@@ -83,7 +84,7 @@ function handleBankDraftCallback_(cb){
       if(state.deleted&&match[1]!=='restore')return 'Khôi phục bản nháp trước khi sửa.';
       if(state.editing&&(!state.editing_at||Date.now()-state.editing_at<120000))return 'Đang cập nhật, thử lại sau.';
       if((state.callback_ids||[]).indexOf(String(cb.id))>=0)return 'Đã xử lý.';
-      var before=bankLearnSnapshot_(state.tx);
+      var before=/^(cat|income|expense|delete|restore)$/.test(match[1])?bankLearnSnapshot_(state.tx):null;
       if(match[1]==='approve'){var invalid=bankApprovalError_(state);if(invalid)return invalid;}
       if(match[1]==='edit')view='edit';
       if(match[1]==='menu'){state.category_choices=FAMILY_CATEGORIES.slice();view=true;}
@@ -99,16 +100,17 @@ function handleBankDraftCallback_(cb){
       state.editing=true;state.editing_at=Date.now();state.callback_ids=(state.callback_ids||[]).concat(String(cb.id)).slice(-20);p.setProperty(key,JSON.stringify(state));return null;
     });
     if(result){ack(result);return true;}
-    // Dismiss Telegram's button spinner before slow message edits/prompt sends.
-    ack();
-    if(match[1]==='approve'){bankApproveCallback_(cb,key,state);return true;}
+    // Approval still acknowledges before the ledger operation; never batch a write.
+    if(match[1]==='approve'){ack();bankApproveCallback_(cb,key,state);return true;}
+    // Both independent Telegram requests leave together, after authorization/state claim.
+    acknowledged=true;uiStarted=Date.now();
     var failed=false,operationError=null,input=match[1]==='money'||match[1]==='description';
     try{
-      if(input)bankPromptForInput_(state,key,match[1]);
-      else if(!changed&&String(msg.text||'')===bankDraftText_(state))telegramApi_('editMessageReplyMarkup',{chat_id:String(state.group),message_id:state.message_id,reply_markup:bankKeyboard_(state,view)});
-      else telegramApi_('editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:bankDraftText_(state),reply_markup:bankKeyboard_(state,view)});
+      if(input)bankPromptForInput_(state,key,match[1],cb.id);
+      else if(!changed&&String(msg.text||'')===bankDraftText_(state))telegramCallbackUi_(cb.id,'editMessageReplyMarkup',{chat_id:String(state.group),message_id:state.message_id,reply_markup:bankKeyboard_(state,view)});
+      else telegramCallbackUi_(cb.id,'editMessageText',{chat_id:String(state.group),message_id:state.message_id,text:bankDraftText_(state),reply_markup:bankKeyboard_(state,view)});
     }catch(err){failed=!/message is not modified/i.test(String(err.message||''));if(failed)operationError=err;}
-    finally{bankLock_(function(){var latest=JSON.parse(p.getProperty(key)||'null');if(latest){latest.editing=false;if(operationError)bankLearnError_(latest,'telegram_action',operationError);p.setProperty(key,JSON.stringify(latest));}});}
+    finally{bankLock_(function(){var latest=JSON.parse(p.getProperty(key)||'null');if(latest){latest.editing=false;latest.last_ui_timing={at:Date.now(),action:match[1],mode:'batch',prepare_ms:uiStarted-started,telegram_ms:Date.now()-uiStarted,handler_ms:Date.now()-started};if(operationError)bankLearnError_(latest,'telegram_action',operationError);p.setProperty(key,JSON.stringify(latest));}});}
     if(failed)bankReplyNote_(msg,changed?'Đã lưu nháp: '+bankSummary_(state)+'. Tin hiển thị chưa cập nhật.':'Chưa mở được thao tác, bấm thử lại.');
   }catch(err){if(acknowledged){try{bankReplyNote_(msg,'Chưa hoàn tất, bấm thử lại.');}catch(ignore){}}else ack('Chưa hoàn tất, thử lại sau.');}
   return true;
