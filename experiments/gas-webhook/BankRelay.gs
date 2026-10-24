@@ -60,7 +60,7 @@ function bankDraftText_(state){
   var t=state.tx,description=String(t.description||'').replace(/\s+/g,' ').trim();
   if(description===t.direction)description='';
   return BANK_DRAFT_MARKER_+(state.deleted?' — ĐÃ XÓA':'')+'\n'+bankSummary_(state)+'\n'+
-    (description?description.slice(0,100)+'\n':'')+'Chưa ghi Sheets';
+    (description?description.slice(0,100)+'\n':'')+'Chưa ghi Sheets · Nút → Dán → nhập → Gửi';
 }
 function bankRelayPost_(e){
   var cfg,event,key,state;
