@@ -500,7 +500,7 @@ test('submitted description sends a fresh Sheets receipt directly under user rep
  x.ctx.handleBankDraftCallback_(callback(x,'description'));const m=inputReply(x,'description','Sửa khóa yên xe',12345,19001);
  x.ctx.handleBankDraftReply_(m);assert.equal(l.writes(),1);assert.equal(l.rows[1][7],312000);assert.equal(l.rows[1][6],'Sửa khóa yên xe');
  const receipt=x.calls.find(c=>c.method==='sendMessage'&&c.payload.text.startsWith('✅ Đã ghi Sheets'));
- assert.ok(receipt);assert.equal(receipt.payload.reply_to_message_id,19001);assert.match(receipt.payload.text,/Chi 312\.000đ/);assert.match(receipt.payload.text,/#/);
+ assert.ok(receipt);assert.match(receipt.payload.text,/Sửa khóa yên xe/);assert.equal(receipt.payload.reply_to_message_id,19001);assert.match(receipt.payload.text,/Chi 312\.000đ/);assert.match(receipt.payload.text,/#/);
  assert.notEqual(l.rows[1][16],String(draft(x).state.message_id));assert.equal(l.rows[1][10],String(draft(x).state.message_id));
  const receiptIndex=x.calls.indexOf(receipt),editIndex=x.calls.findIndex(c=>c.method==='editMessageText'&&c.payload.text.includes('Đã ghi sổ'));assert.ok(receiptIndex<editIndex);
  x.ctx.handleBankDraftReply_(m);assert.equal(l.writes(),1);assert.equal(x.calls.filter(c=>c.method==='sendMessage'&&c.payload.text.startsWith('✅ Đã ghi Sheets')).length,1);
@@ -561,6 +561,8 @@ test('copy commands for an already recorded event edit the same row, including e
  const x=env({autoApprove:true});post(x);const l=ledger(x);x.ctx.handleBankCopyCommand_(copyCommand(x,'suanoidung','Mua sách',23000));
  const id=l.rows[1][12];for(const [n,field,value,col,want] of [[1,'suatien','3000',7,3000],[2,'suadanhmuc','Đi chợ',5,'Đi chợ'],[3,'sualoai','Thu',4,'ThuNhap'],[4,'suanoidung','Mua đồ cho bé',6,'Mua đồ cho bé']]){
   x.ctx.handleBankCopyCommand_(copyCommand(x,field,value,23000+n));assert.equal(l.rows[1][col],want);assert.equal(l.writes(),1);assert.equal(l.rows[1][12],id);
+  const receipt=x.calls.filter(c=>c.method==='sendMessage'&&c.payload.text.startsWith('✅ Đã cập nhật Sheets')).at(-1);
+  assert.ok(receipt);assert.ok(receipt.payload.text.includes(l.rows[1][6]));assert.ok(receipt.payload.text.includes(l.rows[1][5]));assert.ok(receipt.payload.text.includes(x.ctx.bankAmountText_(l.rows[1][7])));
  }
  assert.equal(l.audit.length,4);assert.equal(draft(x).state.learning.history.at(-1).action,'ledger_command');
 });
