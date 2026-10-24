@@ -46,12 +46,9 @@ function bankDetect_(event){
 }
 function bankKeyboard_(state,view){
   function button(text,action){return {text:text,callback_data:'bank:'+action+':'+state.id};}
-  if(state.recorded)return {inline_keyboard:[]};
   if(state.deleted)return {inline_keyboard:[[button('Khôi phục nháp','restore')]]};
+  if(!view||view==='edit')return bankCopyKeyboard_(state);
   if(view==='type')return {inline_keyboard:[[button('Thu','income'),button('Chi','expense')],[button('Quay lại','close')]]};
-  if(!view)return {inline_keyboard:[[button('Edit','edit'),button('Duyệt','approve')]]};
-  if(view==='edit')return {inline_keyboard:[[button('Đổi danh mục','menu'),button('Thu / Chi','kind')],
-    [button('Sửa tiền','money'),button('Sửa nội dung','description')],[button('Quay lại','close'),button('Xóa nháp','delete')]]};
   var categories=state.category_choices||FAMILY_CATEGORIES,rows=[];
   for(var i=0;i<categories.length;i+=2)rows.push(categories.slice(i,i+2).map(function(c,n){return {text:(c===state.tx.category?'✓ ':'')+c,callback_data:'bank:catv:'+state.id+':'+c};}));
   rows.push([button('Quay lại','close')]);return {inline_keyboard:rows};
