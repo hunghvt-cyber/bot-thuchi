@@ -7,6 +7,26 @@ function telegramApi_(method,payload){
   if(!body.ok) throw new Error('Telegram '+method+': '+(body.description||'API error'));
   return body;
 }
+/** Independent callback acknowledgement and UI operation share one fetchAll dispatch.
+ * Never retry an ambiguous batch: sendMessage may already have created a prompt.
+ */
+function telegramCallbackUi_(callbackId,method,payload){
+  if(!/^(editMessageText|editMessageReplyMarkup|sendMessage)$/.test(method))throw Error('Invalid callback UI method');
+  var token=getBotToken();if(!token)throw Error('Thiếu BOT_TOKEN');
+  function request(name,data){return {url:'https://api.telegram.org/bot'+token+'/'+name,method:'post',contentType:'application/json',payload:JSON.stringify(data),muteHttpExceptions:true};}
+  var responses;
+  try{responses=UrlFetchApp.fetchAll([request('answerCallbackQuery',{callback_query_id:callbackId}),request(method,payload)]);}
+  catch(networkError){throw Error('Telegram '+method+': kết nối tạm thời lỗi; kết quả chưa rõ.');}
+  // A stale callback can reject its acknowledgement while its message edit succeeds.
+  var response=responses&&responses[1];if(!response)throw Error('Telegram '+method+': kết quả chưa rõ.');
+  var status=response.getResponseCode(),body;
+  try{body=JSON.parse(response.getContentText());}catch(ignore){throw Error('Telegram '+method+' HTTP '+status+': invalid response');}
+  if(status<200||status>=300||!body.ok){
+    if(/message is not modified/i.test(String(body.description||'')))throw Error('Telegram '+method+' HTTP '+status+': message is not modified');
+    throw Error('Telegram '+method+' HTTP '+status+': API error');
+  }
+  return body;
+}
 function sendText(chatId,text,extra){
   var p={chat_id:String(chatId),text:String(text),parse_mode:'HTML'};
   if(extra) Object.keys(extra).forEach(function(k){p[k]=extra[k];});
@@ -38,4 +58,5 @@ function registerFamilyCommands_(){
   telegramApi_('setMyCommands',{commands:commands,scope:{type:'all_group_chats'}});
   return telegramApi_('getMyCommands',{scope:{type:'all_group_chats'}});
 }
+
 
