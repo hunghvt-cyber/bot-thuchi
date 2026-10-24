@@ -53,12 +53,13 @@ function handleBankLogCommand_(msg){
     var s=states.filter(function(s){return s.id===match[1].toLowerCase();})[0];
     if(!s)text='Không tìm thấy log còn hạn 7 ngày.';
     else{
-      var l=s.learning||{},initial=l.initial;
+      var l=s.learning||{},initial=l.initial,timing=s.last_ui_timing;
+      try{var cachedTiming=JSON.parse(CacheService.getScriptCache().get('BANK_UI_'+s.id)||'null');if(cachedTiming&&(!timing||cachedTiming.at>=timing.at))timing=cachedTiming;}catch(ignore){}
       text='BANK LOG · '+s.id+' · '+String(s.tx&&s.tx.source||'?')+' · '+bankLearnOutcome_(s,now)+'\nBan đầu: '+(initial?bankLearnValues_(initial)+' · '+initial.parser+(initial.reason?' ('+initial.reason+')':''):'chưa có bản gốc nhận diện (nháp cũ)')+
         '\nNội dung ban đầu: '+String(initial&&initial.description||'chưa lưu')+'\nHiện tại: '+bankLearnValues_(s.tx||{})+'\nNội dung: '+String(s.tx&&s.tx.description||'').slice(0,160)+
         '\nLần sửa: '+(l.history||[]).map(function(h){return h.action+' '+Object.keys(h.fields).map(function(k){return k+': '+h.fields[k].from+' → '+h.fields[k].to;}).join('; ');}).join('\n')+
         (l.dropped?'\nĐã lược bớt '+l.dropped+' lần sửa cũ.':'')+'\nLỗi: '+(l.errors||[]).map(function(e){return e.stage+'/'+e.kind+(e.http?' HTTP '+e.http:'');}).join(', ')+
-        (s.last_ui_timing?'\nĐo trong GAS: chuẩn bị '+s.last_ui_timing.prepare_ms+'ms · Telegram '+s.last_ui_timing.telegram_ms+'ms · '+s.last_ui_timing.action+' (batch)':'')+'\nGốc (trích):\n'+String(s.original||'').slice(0,900);
+        (timing?'\nĐo trong GAS: chuẩn bị '+timing.prepare_ms+'ms · Telegram '+timing.telegram_ms+'ms · '+timing.action+' ('+timing.mode+')':'')+'\nGốc (trích):\n'+String(s.original||'').slice(0,900);
     }
   }else{
     var approved=states.filter(function(s){return s.recorded;}).length,changed=states.filter(function(s){return s.learning&&s.learning.history.length;}).length;
