@@ -495,3 +495,38 @@ test('read-only menu races can never authorize a second ledger write or edit an 
  const n=x.batches.length;x.ctx.handleBankDraftCallback_(callback(x,'edit','',12345,'stale'));x.ctx.handleBankDraftCallback_(callback(x,'catv','Đi chợ',12345,'stale-cat'));
  assert.equal(x.batches.length,n);assert.equal(l.writes(),1);assert.equal(l.rows[1][5],'Khác');assert.equal(l.rows[1][4],'ThuNhap');
 });
+test('submitted description sends a fresh Sheets receipt directly under user reply after verified commit, with editable ledger binding',()=>{
+ const x=env({autoApprove:true});post(x,request(sample(undefined,undefined,sample().text.replace('40,000','312,000'))));const l=ledger(x);
+ x.ctx.handleBankDraftCallback_(callback(x,'description'));const m=inputReply(x,'description','Sửa khóa yên xe',12345,19001);
+ x.ctx.handleBankDraftReply_(m);assert.equal(l.writes(),1);assert.equal(l.rows[1][7],312000);assert.equal(l.rows[1][6],'Sửa khóa yên xe');
+ const receipt=x.calls.find(c=>c.method==='sendMessage'&&c.payload.text.startsWith('✅ Đã ghi Sheets'));
+ assert.ok(receipt);assert.equal(receipt.payload.reply_to_message_id,19001);assert.match(receipt.payload.text,/Chi 312\.000đ/);assert.match(receipt.payload.text,/#/);
+ assert.notEqual(l.rows[1][16],String(draft(x).state.message_id));assert.equal(l.rows[1][10],String(draft(x).state.message_id));
+ const receiptIndex=x.calls.indexOf(receipt),editIndex=x.calls.findIndex(c=>c.method==='editMessageText'&&c.payload.text.includes('Đã ghi sổ'));assert.ok(receiptIndex<editIndex);
+ x.ctx.handleBankDraftReply_(m);assert.equal(l.writes(),1);assert.equal(x.calls.filter(c=>c.method==='sendMessage'&&c.payload.text.startsWith('✅ Đã ghi Sheets')).length,1);
+});
+test('fresh receipt cannot be emitted before Sheets flush and stored confirmation have completed',()=>{
+ let x,l;
+ x=env({autoApprove:true,onTelegram:(method,payload)=>{if(method==='sendMessage'&&payload.text.startsWith('✅ Đã ghi Sheets')){assert.equal(l.rows.length,2);assert.equal(draft(x).state.recorded,true);}}});
+ post(x);l=ledger(x);x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k',12345,19002));assert.equal(l.writes(),1);
+});
+test('ambiguous edit commit produces no false success receipt and reports uncertainty under the user input',()=>{
+ const x=env({autoApprove:true});post(x);const l=ledger(x,{onFlush:()=>{throw Error('ambiguous flush');}});
+ x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k',12345,19003));assert.equal(l.writes(),1);
+ assert.equal(x.calls.filter(c=>c.method==='sendMessage'&&c.payload.text.startsWith('✅ Đã ghi Sheets')).length,0);
+ assert.match(x.calls.at(-1).payload.text,/Chưa xác minh ghi sổ/);assert.equal(x.calls.at(-1).payload.reply_to_message_id,19003);
+});
+test('failure editing the old message does not duplicate a delivered fresh receipt or claim ledger failure',()=>{
+ const x=env({autoApprove:true,onTelegram:m=>{if(m==='editMessageText')throw Error('offline old message');}});post(x);const l=ledger(x);
+ x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k',12345,19004));assert.equal(l.writes(),1);assert.equal(draft(x).state.recorded,true);
+ assert.equal(x.calls.filter(c=>c.method==='sendMessage'&&c.payload.text.startsWith('✅ Đã ghi Sheets')).length,1);
+ assert.ok(!x.calls.some(c=>/Chưa hoàn tất cập nhật|Chưa xác minh ghi sổ/.test(c.payload.text||'')));
+ assert.equal(draft(x).state.learning.errors.at(-1).stage,'telegram_confirmation');
+});
+test('receipt transport failure leaves the original confirmation and durable ledger intact without a misleading retry note',()=>{
+ const x=env({autoApprove:true,onTelegram:(method,payload)=>{if(method==='sendMessage'&&payload.text.startsWith('✅ Đã ghi Sheets'))throw Error('private transport payload');}});post(x);const l=ledger(x);
+ x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k',12345,19005));assert.equal(l.writes(),1);assert.equal(draft(x).state.recorded,true);
+ assert.match(x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.text,/Đã ghi sổ/);
+ assert.equal(draft(x).state.learning.errors.at(-1).stage,'telegram_edit_receipt');assert.ok(!JSON.stringify(draft(x).state.learning).includes('private transport payload'));
+ assert.ok(!x.calls.some(c=>/Chưa hoàn tất cập nhật/.test(c.payload.text||'')));
+});
