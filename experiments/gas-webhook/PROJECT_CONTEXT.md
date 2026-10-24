@@ -1,3 +1,7 @@
+# BANK EDIT RECEIPT DETAILS — 24/10/2026
+
+Owner requested every successful bank correction acknowledgement include the resulting transaction description, alongside amount, direction, source, category and transaction code. Both draft-correction commit receipts and already-recorded command update receipts now use bankApprovedText_ with a custom success heading. Original message refresh and receipt fallback share the same formatter; description display preserves the accepted 400-character limit. No ledger logic, extra API calls, MacroDroid configuration or historical rows changed. All 120 mocked tests pass, including assertions for description and current fields after each recorded correction. Verify Actions deployment before calling this live.
+
 # BANK NATIVE COPY CONTROLS — 24/10/2026
 
 Owner approved four visible native copy_text edit buttons instead of slow menu callbacks: Sửa tiền / Nội dung / Danh mục / Thu-Chi. Tap copies /suatien|/suanoidung|/suadanhmuc|/sualoai #b<12-hex event id> plus space; user Pastes, adds value and Sends. Selecting the action no longer calls GAS. Drafts retain Duyệt/Delete; recorded confirmations and success receipts retain the four copy buttons. /bankbuttons (owner/group only) refreshes newest applicable existing message once for testing; old Edit callbacks also transition their message. No MacroDroid/BotFather/private config change.

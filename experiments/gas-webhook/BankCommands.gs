@@ -74,7 +74,7 @@ function handleBankCopyCommand_(msg){
     });
     if(result==='duplicate')return true;
     if(result){note(result);return true;}
-    var sent=telegramApi_('sendMessage',{chat_id:group,reply_to_message_id:msg.message_id,text:'✅ Đã cập nhật Sheets\n'+bankSummary_(state)+'\n#'+state.ledger_id.slice(0,8),reply_markup:bankCopyKeyboard_(state)});
+    var sent=telegramApi_('sendMessage',{chat_id:group,reply_to_message_id:msg.message_id,text:bankApprovedText_(state,'✅ Đã cập nhật Sheets'),reply_markup:bankCopyKeyboard_(state)});
     if(sent.result&&sent.result.message_id)try{bankBindConfirmation_(state,sent.result.message_id);}catch(err){bankLearnStoredError_(key,'copy_confirmation_binding',err);}
     try{telegramApi_('editMessageText',{chat_id:group,message_id:state.message_id,text:bankApprovedText_(state),reply_markup:bankCopyKeyboard_(state)});}catch(err){if(!/message is not modified/i.test(String(err.message||'')))bankLearnStoredError_(key,'copy_confirmation_refresh',err);}
   }catch(err){if(key)bankLearnStoredError_(key,'copy_command',err);try{note('Chưa xác minh hoàn tất lệnh sửa. Kiểm tra sổ trước khi thử lại; lệnh sửa không tạo thêm giao dịch.');}catch(ignore){}}
