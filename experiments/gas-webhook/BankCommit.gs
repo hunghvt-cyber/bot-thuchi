@@ -36,8 +36,8 @@ function bankCommit_(key,actor){
     p.setProperty(key,JSON.stringify(s));return s;
   });
 }
-function bankApprovedText_(state){
-  return (state.ledger_status==='DELETED'?'✅ Giao dịch đã xóa':'✅ Đã ghi sổ')+'\n'+bankSummary_(state)+'\n'+String(state.tx.description||'Không rõ mục đích').replace(/\s+/g,' ').slice(0,100)+'\n#'+state.ledger_id.slice(0,8);
+function bankApprovedText_(state,heading){
+  return (heading||(state.ledger_status==='DELETED'?'✅ Giao dịch đã xóa':'✅ Đã ghi sổ'))+'\n'+bankSummary_(state)+'\n'+String(state.tx.description||'Không rõ mục đích').replace(/\s+/g,' ').slice(0,400)+'\n#'+state.ledger_id.slice(0,8);
 }
 function bankBindConfirmation_(saved,messageId){
   bankLock_(function(){
@@ -55,7 +55,7 @@ function bankApproveCallback_(cb,key,state){
   // Submitted text needs a fresh acknowledgement beside that reply, not only an edit above.
   if(cb.edit_reply_id){
     try{var receipt=telegramApi_('sendMessage',{chat_id:String(saved.group),reply_to_message_id:cb.edit_reply_id,
-      text:'✅ Đã ghi Sheets\n'+bankSummary_(saved)+'\n#'+saved.ledger_id.slice(0,8),reply_markup:bankCopyKeyboard_(saved)});receiptId=receipt.result&&receipt.result.message_id;}
+      text:bankApprovedText_(saved,'✅ Đã ghi Sheets'),reply_markup:bankCopyKeyboard_(saved)});receiptId=receipt.result&&receipt.result.message_id;}
     catch(err){bankLearnStoredError_(key,'telegram_edit_receipt',err);}
   }
   try{telegramApi_('editMessageText',{chat_id:String(saved.group),message_id:saved.message_id,text:bankApprovedText_(saved),reply_markup:bankCopyKeyboard_(saved)});}
