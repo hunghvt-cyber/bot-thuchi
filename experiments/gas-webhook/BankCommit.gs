@@ -55,14 +55,14 @@ function bankApproveCallback_(cb,key,state){
   // Submitted text needs a fresh acknowledgement beside that reply, not only an edit above.
   if(cb.edit_reply_id){
     try{var receipt=telegramApi_('sendMessage',{chat_id:String(saved.group),reply_to_message_id:cb.edit_reply_id,
-      text:'✅ Đã ghi Sheets\n'+bankSummary_(saved)+'\n#'+saved.ledger_id.slice(0,8)});receiptId=receipt.result&&receipt.result.message_id;}
+      text:'✅ Đã ghi Sheets\n'+bankSummary_(saved)+'\n#'+saved.ledger_id.slice(0,8),reply_markup:bankCopyKeyboard_(saved)});receiptId=receipt.result&&receipt.result.message_id;}
     catch(err){bankLearnStoredError_(key,'telegram_edit_receipt',err);}
   }
-  try{telegramApi_('editMessageText',{chat_id:String(saved.group),message_id:saved.message_id,text:bankApprovedText_(saved),reply_markup:{inline_keyboard:[]}});}
+  try{telegramApi_('editMessageText',{chat_id:String(saved.group),message_id:saved.message_id,text:bankApprovedText_(saved),reply_markup:bankCopyKeyboard_(saved)});}
   catch(err){if(!/message is not modified/i.test(String(err.message||''))){
     bankLearnStoredError_(key,'telegram_confirmation',err);
     // A visible reply receipt already confirms success; do not send another duplicate notice.
-    if(!receiptId)try{var sent=telegramApi_('sendMessage',{chat_id:String(saved.group),reply_to_message_id:saved.message_id,text:bankApprovedText_(saved)});receiptId=sent.result&&sent.result.message_id;}
+    if(!receiptId)try{var sent=telegramApi_('sendMessage',{chat_id:String(saved.group),reply_to_message_id:saved.message_id,text:bankApprovedText_(saved),reply_markup:bankCopyKeyboard_(saved)});receiptId=sent.result&&sent.result.message_id;}
     catch(sendError){bankLearnStoredError_(key,'telegram_confirmation_fallback',sendError);}
   }}
   if(receiptId)try{bankBindConfirmation_(saved,receiptId);}catch(bindError){bankLearnStoredError_(key,'telegram_confirmation_binding',bindError);}
