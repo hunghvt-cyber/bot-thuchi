@@ -1,4 +1,4 @@
-/** New bank formats: existing local parser first, Gemini fallback, preview only. */
+/** Bank extraction plus owner-driven draft navigation, correction and approval. */
 function bankDetect_(event){
   var local=bankParse_(event);
   if(local.status==='recognized'){
@@ -53,13 +53,13 @@ function bankKeyboard_(state,view){
   if(view==='edit')return {inline_keyboard:[[button('Đổi danh mục','menu'),button('Thu / Chi','kind')],
     [button('Sửa tiền','money'),button('Sửa nội dung','description')],[button('Quay lại','close'),button('Xóa nháp','delete')]]};
   var categories=state.category_choices||FAMILY_CATEGORIES,rows=[];
-  for(var i=0;i<categories.length;i+=2)rows.push(categories.slice(i,i+2).map(function(c,n){return {text:(c===state.tx.category?'✓ ':'')+c,callback_data:'bank:cat:'+state.id+':'+(i+n)};}));
+  for(var i=0;i<categories.length;i+=2)rows.push(categories.slice(i,i+2).map(function(c,n){return {text:(c===state.tx.category?'✓ ':'')+c,callback_data:'bank:catv:'+state.id+':'+c};}));
   rows.push([button('Quay lại','close')]);return {inline_keyboard:rows};
 }
 function bankPromptForInput_(state,key,kind,callbackId){
   var money=kind==='money',text=money?'nhập số tiền mới, ví dụ 50k hoặc 50.000.':'nhập nội dung mới.';
   var payload={chat_id:String(state.group),parse_mode:'HTML',
-    text:BANK_DRAFT_MARKER_+'\n<a href="tg://user?id='+state.owner+'">Đại ca</a>, '+text+'\nChưa ghi Sheets · yêu cầu hết hạn sau 5 phút.',
+    text:BANK_DRAFT_MARKER_+'\n<a href="tg://user?id='+state.owner+'">Đại ca</a>, '+text+'\nGửi giá trị mới để sửa và ghi sổ · yêu cầu hết hạn sau 5 phút.',
     reply_markup:{force_reply:true,selective:true,input_field_placeholder:money?'Ví dụ: 50k':'Nội dung mới'}};
   var sent=callbackId?telegramCallbackUi_(callbackId,'sendMessage',payload):telegramApi_('sendMessage',payload);
   if(!sent.result||!sent.result.message_id)throw Error('input_prompt_failed');
@@ -67,12 +67,13 @@ function bankPromptForInput_(state,key,kind,callbackId){
     JSON.stringify({eventKey:key,inputKind:kind,expires:Math.min(state.expires,Date.now()+300000)}));});
 }
 function handleBankDraftCallback_(cb){
-  var match=String(cb&&cb.data||'').match(/^bank:(edit|approve|menu|cat|close|kind|income|expense|money|description|delete|restore):([a-f0-9]{12})(?::(\d{1,2}))?$/);
+  var match=String(cb&&cb.data||'').match(/^bank:(edit|approve|menu|cat|catv|close|kind|income|expense|money|description|delete|restore):([a-f0-9]{12})(?::([^]+))?$/);
   if(!match)return String(cb&&cb.data||'').indexOf('bank:')===0;
   var acknowledged=false,started=Date.now(),uiStarted;
   function ack(text){if(acknowledged)return;acknowledged=true;try{telegramApi_('answerCallbackQuery',{callback_query_id:cb.id,text:text});}catch(ignore){}}
   var msg=cb.message,p=PropertiesService.getScriptProperties(),state,key,changed=false,view=false;
   if(!msg||!msg.chat){ack('Không có bản nháp.');return true;}
+  if(/^(edit|menu|kind|close)$/.test(match[1]))return bankNavigate_(cb,match,ack);
   try{
     var result=bankLock_(function(){
       var map=JSON.parse(p.getProperty('BANK_MSG_'+msg.chat.id+'_'+msg.message_id)||'null');
@@ -84,22 +85,24 @@ function handleBankDraftCallback_(cb){
       if(state.deleted&&match[1]!=='restore')return 'Khôi phục bản nháp trước khi sửa.';
       if(state.editing&&(!state.editing_at||Date.now()-state.editing_at<120000))return 'Đang cập nhật, thử lại sau.';
       if((state.callback_ids||[]).indexOf(String(cb.id))>=0)return 'Đã xử lý.';
-      var before=/^(cat|income|expense|delete|restore)$/.test(match[1])?bankLearnSnapshot_(state.tx):null;
+      var before=/^(cat|catv|income|expense|delete|restore)$/.test(match[1])?bankLearnSnapshot_(state.tx):null;
       if(match[1]==='approve'){var invalid=bankApprovalError_(state);if(invalid)return invalid;}
       if(match[1]==='edit')view='edit';
       if(match[1]==='menu'){state.category_choices=FAMILY_CATEGORIES.slice();view=true;}
       if(match[1]==='kind')view='type';
       if(match[1]==='cat'){
-        var categories=state.category_choices||[],index=Number(match[3]);
+        var categories=state.category_choices||FAMILY_CATEGORIES,index=Number(match[3]);
         if(match[3]===undefined||!categories[index]||FAMILY_CATEGORIES.indexOf(categories[index])<0)return 'Danh mục không hợp lệ.';
         state.tx.category=categories[index];changed=true;
       }
+      if(match[1]==='catv'){if(FAMILY_CATEGORIES.indexOf(match[3])<0)return 'Danh mục không hợp lệ.';state.tx.category=match[3];changed=true;}
       if(match[1]==='income'||match[1]==='expense'){state.tx.direction=match[1]==='income'?'Thu':'Chi';changed=true;}
       if(match[1]==='delete'||match[1]==='restore'){state.deleted=match[1]==='delete';changed=true;}
       if(changed)bankLearnChange_(state,before,match[1]);
       state.editing=true;state.editing_at=Date.now();state.callback_ids=(state.callback_ids||[]).concat(String(cb.id)).slice(-20);p.setProperty(key,JSON.stringify(state));return null;
     });
     if(result){ack(result);return true;}
+    if(/^(cat|catv|income|expense)$/.test(match[1])&&bankAutoCommitAfterEdit_(cb.from,key,state,function(){ack();}))return true;
     // Approval still acknowledges before the ledger operation; never batch a write.
     if(match[1]==='approve'){ack();bankApproveCallback_(cb,key,state);return true;}
     // Both independent Telegram requests leave together, after authorization/state claim.
@@ -113,5 +116,31 @@ function handleBankDraftCallback_(cb){
     finally{bankLock_(function(){var latest=JSON.parse(p.getProperty(key)||'null');if(latest){latest.editing=false;latest.last_ui_timing={at:Date.now(),action:match[1],mode:'batch',prepare_ms:uiStarted-started,telegram_ms:Date.now()-uiStarted,handler_ms:Date.now()-started};if(operationError)bankLearnError_(latest,'telegram_action',operationError);p.setProperty(key,JSON.stringify(latest));}});}
     if(failed)bankReplyNote_(msg,changed?'Đã lưu nháp: '+bankSummary_(state)+'. Tin hiển thị chưa cập nhật.':'Chưa mở được thao tác, bấm thử lại.');
   }catch(err){if(acknowledged){try{bankReplyNote_(msg,'Chưa hoàn tất, bấm thử lại.');}catch(ignore){}}else ack('Chưa hoàn tất, thử lại sau.');}
+  return true;
+}
+
+/** Read-only navigation: no ScriptLock, no event rewrite, no edit claim. */
+function bankNavigate_(cb,match,ack){
+  var started=Date.now(),msg=cb.message,p=PropertiesService.getScriptProperties(),state,key;
+  try{
+    var map=JSON.parse(p.getProperty('BANK_MSG_'+msg.chat.id+'_'+msg.message_id)||'null');
+    if(!map||map.expires<=Date.now()){ack('Bản nháp hết hạn.');return true;}
+    key=map.eventKey;state=JSON.parse(p.getProperty(key)||'null');
+    if(!state||state.id!==match[2]||state.expires<=Date.now()||String(state.group)!==String(msg.chat.id)||state.message_id!==msg.message_id){ack('Bản nháp không còn khả dụng.');return true;}
+    if(String(state.owner)!==String(cb.from&&cb.from.id)){ack('Chỉ chủ thiết bị được sửa.');return true;}
+    if(state.recorded){ack('Đã ghi sổ. Reply tin giao dịch để sửa hoặc xóa.');return true;}
+    if(state.deleted){ack('Khôi phục bản nháp trước khi sửa.');return true;}
+    if(state.editing&&(!state.editing_at||Date.now()-state.editing_at<120000)){ack('Đang cập nhật, thử lại sau.');return true;}
+    // New category callbacks carry the category value, so no saved index snapshot is needed.
+    state.category_choices=FAMILY_CATEGORIES.slice();
+    var view=match[1]==='edit'?'edit':match[1]==='menu'?true:match[1]==='kind'?'type':false;
+    var same=String(msg.text||'')===bankDraftText_(state),payload={chat_id:String(state.group),message_id:state.message_id,reply_markup:bankKeyboard_(state,view)};
+    if(!same)payload.text=bankDraftText_(state);
+    var uiStarted=Date.now();
+    try{telegramCallbackUi_(cb.id,same?'editMessageReplyMarkup':'editMessageText',payload);}
+    catch(err){if(!/message is not modified/i.test(String(err.message||''))){bankLearnStoredError_(key,'telegram_navigation',err);bankReplyNote_(msg,'Chưa mở được thao tác, bấm thử lại.');}}
+    // Cache timing only, after visible UI dispatch. No authoritative event state is cached.
+    try{CacheService.getScriptCache().put('BANK_UI_'+state.id,JSON.stringify({at:Date.now(),action:match[1],mode:'read_only_batch',prepare_ms:uiStarted-started,telegram_ms:Date.now()-uiStarted}),3600);}catch(ignore){}
+  }catch(err){ack('Chưa hoàn tất, thử lại sau.');}
   return true;
 }
