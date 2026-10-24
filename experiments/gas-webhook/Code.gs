@@ -16,6 +16,7 @@ function doPost(e){
   if(webhookSecret&&!receiptWebhookKeyMatches_(e&&e.parameter&&e.parameter.key,webhookSecret))return HtmlService.createHtmlOutput('OK');
   // Draft replies must not fall through to normal ledger parsing, even after expiry.
   try{var bankUpdate=JSON.parse(e&&e.postData&&e.postData.contents||'{}');
+    if(bankUpdate.message&&typeof handleBankCopyCommand_==='function'&&handleBankCopyCommand_(bankUpdate.message))return HtmlService.createHtmlOutput('OK');
     if(bankUpdate.message&&typeof handleBankLogCommand_==='function'&&handleBankLogCommand_(bankUpdate.message))return HtmlService.createHtmlOutput('OK');
     if(bankUpdate.callback_query&&typeof handleBankDraftCallback_==='function'&&handleBankDraftCallback_(bankUpdate.callback_query))return HtmlService.createHtmlOutput('OK');
     if(bankUpdate.message&&typeof handleBankDraftReply_==='function'&&handleBankDraftReply_(bankUpdate.message))return HtmlService.createHtmlOutput('OK');

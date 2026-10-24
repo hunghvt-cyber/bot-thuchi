@@ -22,7 +22,7 @@ function env(options={}){
  };
  ctx.telegramCallbackUi_=(callbackId,method,payload)=>{batches.push({callbackId,method,payload});if(options.onBatch)options.onBatch(method,payload);try{ctx.telegramApi_('answerCallbackQuery',{callback_query_id:callbackId});}catch(ignore){}return ctx.telegramApi_(method,payload);};
  vm.createContext(ctx);
- for(const f of ['BankNotifications.gs','BankAssist.gs','BankRelay.gs','BankCommit.gs','BankLearning.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
+ for(const f of ['BankNotifications.gs','BankAssist.gs','BankRelay.gs','BankCommit.gs','BankLearning.gs','BankCommands.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
  // Earlier focused draft-edit tests isolate parsing/display from the new commit policy.
  if(!options.autoApprove)ctx.bankAutoCommitAfterEdit_=()=>false;
  return {ctx,values,calls,props,batches,cache,stats};
@@ -144,7 +144,7 @@ function callback(x,action='menu',index='',owner=12345,id='callback1'){
 }
 test('category button lists all 14 existing categories, chooses one and preserves amount',()=>{
  const x=env();vm.runInContext(fs.readFileSync(root+'FamilyConfig.gs','utf8'),x.ctx);post(x);
- assert.equal(x.calls[0].payload.reply_markup.inline_keyboard[0][0].text,'Edit');
+ assert.equal(x.calls[0].payload.reply_markup.inline_keyboard[0][0].text,'Sửa tiền');
  x.ctx.handleBankDraftCallback_(callback(x));const menu=x.calls.filter(c=>c.method==='editMessageReplyMarkup').at(-1).payload.reply_markup.inline_keyboard;
  const choices=menu.flat().filter(c=>c.callback_data.startsWith('bank:catv:'));assert.equal(choices.length,14);
  assert.deepEqual(Array.from(choices,c=>c.text.replace(/^✓ /,'')).sort(),Array.from(x.ctx.FAMILY_CATEGORIES).sort());
@@ -176,10 +176,10 @@ function inputReply(x,kind,value,owner=12345,id=9900){
   reply_to_message:{message_id:Number(key.split('_').at(-1)),text:prompt.payload.text}};
 }
 test('draft action panel has money, content, category, direction and soft-delete buttons',()=>{
- const x=env();post(x);assert.deepEqual(Array.from(x.calls[0].payload.reply_markup.inline_keyboard.flat(),b=>b.text),['Edit','Duyệt']);
+ const x=env();post(x);assert.deepEqual(Array.from(x.calls[0].payload.reply_markup.inline_keyboard.flat(),b=>b.text),['Sửa tiền','Nội dung','Danh mục','Thu / Chi','Duyệt','Xóa nháp']);
  x.ctx.handleBankDraftCallback_(callback(x,'edit'));
  const labels=x.calls.at(-1).payload.reply_markup.inline_keyboard.flat().map(b=>b.text);
- for(const label of ['Sửa tiền','Sửa nội dung','Đổi danh mục','Thu / Chi','Xóa nháp'])assert.ok(labels.includes(label));
+ for(const label of ['Sửa tiền','Nội dung','Danh mục','Thu / Chi','Xóa nháp'])assert.ok(labels.includes(label));
  assert.ok(!x.calls[0].payload.text.includes('Reply để sửa'));
 });
 test('money button opens selective reply prompt; bare 3k edits original draft, not ledger',()=>{
@@ -248,7 +248,7 @@ function ledger(x,options={}){
  appendRow:row=>{writes++;rows.push(Array.from(row));if(options.onAppend)options.onAppend(row);}};
  x.ctx.familySheet_=()=>sh;x.ctx.SpreadsheetApp={flush:()=>{if(options.onFlush)options.onFlush();}};
  x.ctx.Utilities.formatDate=date=>new Date(date.getTime()+7*3600000).toISOString().slice(0,10).split('-').reverse().join('/');
- return {rows,writes:()=>writes,sh};
+ const audit=[];x.ctx.familyAuditSheet_=()=>({appendRow:r=>audit.push(Array.from(r))});return {rows,writes:()=>writes,sh,audit};
 }
 test('owner Duyệt writes edited exact VND/type/category once to existing 18-column schema',()=>{
  const x=env();post(x);const l=ledger(x);x.ctx.handleBankDraftReply_(reply(x,'sửa tiền 3k'));
@@ -258,7 +258,7 @@ test('owner Duyệt writes edited exact VND/type/category once to existing 18-co
  assert.equal(row[0].toISOString(),'2026-10-22T04:48:00.000Z');assert.equal(row[1],'22/10/2026');
  assert.equal(row[14],'Ngân hàng: VIB');assert.ok(!row[14].includes('Số dư'));
  assert.equal(draft(x).state.recorded,true);const display=x.calls.filter(c=>c.method==='editMessageText').at(-1).payload;
- assert.match(display.text,/✅ Đã ghi sổ\nChi 3\.000đ/);assert.equal(display.reply_markup.inline_keyboard.length,0);
+ assert.match(display.text,/✅ Đã ghi sổ\nChi 3\.000đ/);assert.equal(display.reply_markup.inline_keyboard.flat().length,4);
  x.ctx.handleBankDraftCallback_(cb);x.ctx.handleBankDraftCallback_(callback(x,'approve','',12345,'approve-again'));assert.equal(l.writes(),1);
 });
 test('income approval and receipt-only time use original captured time, not approval time',()=>{
@@ -529,4 +529,62 @@ test('receipt transport failure leaves the original confirmation and durable led
  assert.match(x.calls.filter(c=>c.method==='editMessageText').at(-1).payload.text,/Đã ghi sổ/);
  assert.equal(draft(x).state.learning.errors.at(-1).stage,'telegram_edit_receipt');assert.ok(!JSON.stringify(draft(x).state.learning).includes('private transport payload'));
  assert.ok(!x.calls.some(c=>/Chưa hoàn tất cập nhật/.test(c.payload.text||'')));
+});
+function copyCommand(x,field='suanoidung',value='Mua sách',id=22000,actor=12345){return {message_id:id,chat:{id:-10012345},from:{id:actor},text:'/'+field+' #b'+draft(x).state.id+(value?' '+value:'')};}
+test('four copy buttons contain only client copy_text commands and appear directly with no Edit/menu callback',()=>{
+ const x=env();post(x);const buttons=x.calls[0].payload.reply_markup.inline_keyboard.flat(),copy=buttons.filter(b=>b.copy_text);
+ assert.deepEqual(Array.from(copy,b=>b.text),['Sửa tiền','Nội dung','Danh mục','Thu / Chi']);
+ for(const b of copy){assert.equal(b.callback_data,undefined);assert.match(b.copy_text.text,/^\/(suatien|suanoidung|suadanhmuc|sualoai) #b[a-f0-9]{12} $/);assert.ok(b.copy_text.text.length<=256);}
+ assert.ok(!buttons.some(b=>b.text==='Edit'));assert.equal(x.batches.length,0);assert.equal(x.calls.length,1);
+});
+test('pasted draft command commits edited exact VND and confirms under the submitted command without needing Reply',()=>{
+ const x=env({autoApprove:true});post(x);const l=ledger(x),m=copyCommand(x,'suatien','3.000',22001);
+ assert.equal(x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({message:m})}}).html,'OK');
+ assert.equal(l.writes(),1);assert.equal(l.rows[1][7],3000);assert.equal(draft(x).state.recorded,true);
+ const receipt=x.calls.find(c=>c.method==='sendMessage'&&c.payload.text.startsWith('✅ Đã ghi Sheets'));assert.equal(receipt.payload.reply_to_message_id,22001);
+ assert.equal(receipt.payload.reply_markup.inline_keyboard.flat().filter(b=>b.copy_text).length,4);
+});
+test('pasted content, category and type draft commands are supported without prompts or submenus',()=>{
+ for(const [field,value,key,want] of [['suanoidung','Mua sách','description','Mua sách'],['suadanhmuc','Đi chợ','category','Đi chợ'],['sualoai','Thu','direction','Thu']]){
+  const x=env({autoApprove:true});post(x);const l=ledger(x);x.ctx.handleBankCopyCommand_(copyCommand(x,field,value));assert.equal(l.writes(),1);assert.equal(draft(x).state.tx[key],want);assert.equal(x.batches.length,0);
+ }
+});
+test('copy command missing/invalid values, wrong owner/group or webhook secret never write or fall into normal ledger intake',()=>{
+ for(const mode of ['missing','invalid','owner','group','secret','expired']){
+  const x=env({autoApprove:true});post(x);const l=ledger(x),m=copyCommand(x,'suatien',mode==='missing'?'':mode==='invalid'?'3k hay 5k':'3k');
+  if(mode==='owner')m.from.id=999;if(mode==='group')m.chat.id=-999;if(mode==='expired'){const d=draft(x);d.state.expires=0;x.props.setProperty(d.key,JSON.stringify(d.state));}
+  x.ctx.doPost({parameter:{key:mode==='secret'?'wrong':'telegram-secret'},postData:{contents:JSON.stringify({message:m})}});assert.equal(l.writes(),0,mode);
+ }
+ const x=env();assert.equal(x.ctx.handleBankCopyCommand_({text:'/suanoidung #d0090412 old',chat:{id:-10012345},from:{id:12345}}),false);
+});
+test('copy commands for an already recorded event edit the same row, including exact bare VND and Thu/Chi, and audit changes',()=>{
+ const x=env({autoApprove:true});post(x);const l=ledger(x);x.ctx.handleBankCopyCommand_(copyCommand(x,'suanoidung','Mua sách',23000));
+ const id=l.rows[1][12];for(const [n,field,value,col,want] of [[1,'suatien','3000',7,3000],[2,'suadanhmuc','Đi chợ',5,'Đi chợ'],[3,'sualoai','Thu',4,'ThuNhap'],[4,'suanoidung','Mua đồ cho bé',6,'Mua đồ cho bé']]){
+  x.ctx.handleBankCopyCommand_(copyCommand(x,field,value,23000+n));assert.equal(l.rows[1][col],want);assert.equal(l.writes(),1);assert.equal(l.rows[1][12],id);
+ }
+ assert.equal(l.audit.length,4);assert.equal(draft(x).state.learning.history.at(-1).action,'ledger_command');
+});
+test('replaying the original draft command or an older recorded command never reverts a later edit or adds another row',()=>{
+ const x=env({autoApprove:true});post(x);const l=ledger(x),first=copyCommand(x,'suatien','3k',24000);x.ctx.handleBankCopyCommand_(first);
+ const second=copyCommand(x,'suatien','5k',24001);x.ctx.handleBankCopyCommand_(second);const n=x.calls.length;
+ x.ctx.handleBankCopyCommand_(first);x.ctx.handleBankCopyCommand_(second);assert.equal(l.rows[1][7],5000);assert.equal(l.writes(),1);assert.equal(x.calls.length,n);
+});
+test('a booked copy command may edit within the seven-day log window after draft expiry, but never revives a deleted or expired record',()=>{
+ const x=env({autoApprove:true});post(x);const l=ledger(x);x.ctx.handleBankCopyCommand_(copyCommand(x,'suatien','3k',25000));
+ const d=draft(x);d.state.captured_at=Date.now()-3*86400000;d.state.created=d.state.captured_at;d.state.expires=d.state.captured_at+48*3600000;x.props.setProperty(d.key,JSON.stringify(d.state));
+ x.ctx.handleBankCopyCommand_(copyCommand(x,'suatien','5k',25001));assert.equal(l.rows[1][7],5000);
+ l.rows[1][15]='DELETED';x.ctx.handleBankCopyCommand_(copyCommand(x,'suatien','6k',25002));assert.equal(l.rows[1][7],5000);
+ const s=draft(x);s.state.captured_at=Date.now()-8*86400000;s.state.created=s.state.captured_at;x.props.setProperty(s.key,JSON.stringify(s.state));
+ x.ctx.handleBankCopyCommand_(copyCommand(x,'suatien','7k',25003));assert.equal(l.rows[1][7],5000);assert.equal(l.writes(),1);
+});
+test('unknown and ambiguous bank references are consumed safely rather than creating natural-language expenses',()=>{
+ const x=env({autoApprove:true});post(x);const l=ledger(x),m=copyCommand(x,'suatien','3k');m.text=m.text.replace(draft(x).state.id,'aaaaaaaaaaaa');
+ x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({message:m})}});assert.equal(l.writes(),0);
+ const d=draft(x);x.values.BANK_EVT_other=JSON.stringify(d.state);x.ctx.handleBankCopyCommand_(copyCommand(x,'suatien','3k'));assert.equal(l.writes(),0);
+});
+test('bankbuttons refreshes an existing latest message without writing transactions, properties or taking a ledger lock',()=>{
+ const x=env();post(x);const writes=x.stats.writes,locks=x.stats.locks;
+ x.ctx.doPost({parameter:{key:'telegram-secret'},postData:{contents:JSON.stringify({message:{message_id:27000,chat:{id:-10012345},from:{id:12345},text:'/bankbuttons'}})}});
+ const update=x.calls.find(c=>c.method==='editMessageReplyMarkup');assert.ok(update);assert.equal(update.payload.message_id,draft(x).state.message_id);
+ assert.equal(update.payload.reply_markup.inline_keyboard.flat().filter(b=>b.copy_text).length,4);assert.equal(x.stats.writes,writes);assert.equal(x.stats.locks,locks);
 });
