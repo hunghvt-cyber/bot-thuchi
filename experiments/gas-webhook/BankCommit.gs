@@ -1,4 +1,4 @@
-/** Only an explicit owner approval can write a bank draft to Transactions. */
+/** Owner Duyệt or a submitted valid correction can approve a bank draft. */
 function bankCell_(value){var text=String(value||'');return /^\s*[=+@-]/.test(text)?"'"+text:text;}
 function bankApprovalError_(state){
   if(state.deleted)return 'Khôi phục bản nháp trước khi duyệt.';
@@ -55,4 +55,11 @@ function bankApproveCallback_(cb,key,state){
       for(var i=0;i<rows.length;i++)if(String(rows[i][0])===saved.ledger_id){sh.getRange(i+2,17).setValue(String(sent.result.message_id));break;}
     });
   }}
+}
+
+/** Owner submitted a valid field correction: it now carries approval as requested. */
+function bankAutoCommitAfterEdit_(actor,key,state,beforeCommit){
+  if(bankApprovalError_(state))return false;
+  if(beforeCommit)beforeCommit();
+  bankApproveCallback_({from:actor},key,state);return true;
 }
