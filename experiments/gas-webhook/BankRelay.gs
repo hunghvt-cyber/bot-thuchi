@@ -144,7 +144,7 @@ function handleBankDraftReply_(msg){
     if(changed==='duplicate')return true;
     if(changed==='recorded'){telegramApi_('sendMessage',{chat_id:String(msg.chat.id),reply_to_message_id:msg.message_id,text:'Giao dịch đã ghi sổ. Reply tin xác nhận để sửa hoặc xóa.'});return true;}
     if(changed!=='updated'){bankReplyNote_(msg,{recorded:'Đã ghi sổ. Reply tin xác nhận mới để sửa hoặc xóa.',cancelled:'Đã hủy nhập.',owner_only:'Chỉ chủ thiết bị đã cấu hình được sửa.',busy:'Bản nháp đang được cập nhật, thử lại sau.',restore_first:'Khôi phục bản nháp trước khi sửa.',invalid_amount:'Số tiền không hợp lệ.',invalid_category:'Sửa danh mục '+FAMILY_CATEGORIES.join(' / '),invalid_direction:'Dùng sửa loại thu hoặc sửa loại chi.',too_long:'Nội dung tối đa 400 ký tự.',expired:'Bản nháp hết hạn.',help:'Dùng các nút dưới tin nháp để sửa tiền, nội dung, danh mục, thu/chi hoặc xóa.'}[changed]||'Không cập nhật được bản nháp.');return true;}
-    if(wantsCommit&&bankAutoCommitAfterEdit_(msg.from,key,state))return true;
+    if(wantsCommit&&bankAutoCommitAfterEdit_(msg.from,key,state,null,msg.message_id))return true;
     var editError=null;
     try{
       var newText=bankDraftText_(state);
