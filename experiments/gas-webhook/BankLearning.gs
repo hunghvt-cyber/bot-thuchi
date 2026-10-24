@@ -58,7 +58,7 @@ function handleBankLogCommand_(msg){
         '\nNội dung ban đầu: '+String(initial&&initial.description||'chưa lưu')+'\nHiện tại: '+bankLearnValues_(s.tx||{})+'\nNội dung: '+String(s.tx&&s.tx.description||'').slice(0,160)+
         '\nLần sửa: '+(l.history||[]).map(function(h){return h.action+' '+Object.keys(h.fields).map(function(k){return k+': '+h.fields[k].from+' → '+h.fields[k].to;}).join('; ');}).join('\n')+
         (l.dropped?'\nĐã lược bớt '+l.dropped+' lần sửa cũ.':'')+'\nLỗi: '+(l.errors||[]).map(function(e){return e.stage+'/'+e.kind+(e.http?' HTTP '+e.http:'');}).join(', ')+
-        '\nGốc (trích):\n'+String(s.original||'').slice(0,900);
+        (s.last_ui_timing?'\nĐo trong GAS: chuẩn bị '+s.last_ui_timing.prepare_ms+'ms · Telegram '+s.last_ui_timing.telegram_ms+'ms · '+s.last_ui_timing.action+' (batch)':'')+'\nGốc (trích):\n'+String(s.original||'').slice(0,900);
     }
   }else{
     var approved=states.filter(function(s){return s.recorded;}).length,changed=states.filter(function(s){return s.learning&&s.learning.history.length;}).length;
