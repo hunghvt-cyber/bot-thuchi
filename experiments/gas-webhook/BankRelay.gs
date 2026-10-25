@@ -77,6 +77,10 @@ function bankRelayPost_(e){
     cfg=bankConfig_();event=bankReadEnvelope_(e);
     if(!bankEqual_(event.key,cfg.key))return reply({ok:false,status:'unauthorized'});
     var now=Date.now();if(event.captured_at>now+300000||event.captured_at+BANK_TTL_<=now)return reply({ok:false,status:'expired_or_future'});
+    // Donation retry occurs before existing BANK_EVT dedupe, so a lost ACK can reconcile the separate store.
+    if(typeof donationIngest_==='function'){
+      try{donationIngest_(event);}catch(donationError){return reply({ok:false,status:'bank_busy'});}
+    }
     var tx;
     // Exact request identity includes receipt time, source, title and complete content; never amount-only.
     key='BANK_EVT_'+bankDigest_([event.device,event.captured_at,event.package_name,event.title,event.text].join('\n'));

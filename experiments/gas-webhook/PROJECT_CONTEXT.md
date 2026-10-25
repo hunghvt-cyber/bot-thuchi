@@ -1,3 +1,7 @@
+# MB DONATE DRAFT — 25/10/2026
+
+Owner supplied actual MB/VCB notification screenshot. Local deterministic parsers now handle both signs for com.VCB and com.mbmobile. Donation projection only accepts incoming MB 566766, with stable bank reference dedupe; family Telegram still receives Thu and Chi. Dedicated HomepageDonations Sheet stores sanitized JSON; Gemini thanks is once per new donation. No automatic family Transactions writes, phone edits or old event replay. 135 tests pass locally; deployment and real transfer verification are separate. See DONATIONS.md.
+
 # MACRODROID SPOOL ACK V2 — 24/10/2026
 
 Owner authorized upgrading capture/queue/ACK/bounded retry/serialization/logging together. Intake supports opt-in `&ack=2` returning exactly four LF-terminated lines: BANK-ACK-2, SHA256 of exact UTF8 request text, existing intake status, END_BANK_ACK_2. No secrets/raw content in ACK. Status remains subject to existing authentication, event claim and Telegram-send uncertainty handling; no additional Telegram/Sheets operation. Existing v1 clients without this parameter retain JSON responses. 122 mocked GAS tests pass. MacroDroid two-macro trial, native HTTP plus local file spool, lives in macrodroid-config experiment/bank-durable-queue-v2-20261024. No phone import or Android shell/FileChanged behavior is inferred from validation. Drafts remain approval-only, seven-day server log and 48h draft expiry unchanged; queued events older than 48h are held for manual review rather than retimestamped.

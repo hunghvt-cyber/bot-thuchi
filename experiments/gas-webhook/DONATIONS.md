@@ -1,0 +1,13 @@
+# MB donate projection — source ready, verify deployment/runtime separately
+
+Owner selected MB account 566766 only, arbitrary donor messages, funny Gemini thanks on Homepage terminal, rolling 24h history OR newest ten records. Existing phone Durable Relay should remain the only capture/queue/ACK path.
+
+Donations.gs stores sanitized JSON in a dedicated HomepageDonations tab in the existing spreadsheet. No auto-approval or change to Transactions. The hook is after relay authentication/time checks, before BANK_EVT short-circuit so replay can reconcile a previously ambiguous donation append. Gemini is called once only for a durably new donation; amount/style seed only, no raw/donor instructions in model prompt. Failure keeps the saved fallback thanks. Public GET `?action=homepage_donations` never creates a Sheet, calls Gemini or reads Transactions. Cache five seconds; 24h rolling OR newest ten. Durable dedupe retained independently of visible history.
+
+Owner supplied real MB/VCB notification screenshot on 25/10/2026. Deterministic local parsers now support both signed directions for packages com.VCB and com.mbmobile, verified against the package names in the owner's saved MacroDroid app list. MB donate accepts only incoming 566766 (full account or observed 56xxx766 plus matching bank routing suffix). Reference-derived identity ignores phone capture-time and prevents OS/retry duplication. Public donor text removes bank reference and routing suffix; account/balance/TU metadata are not published. Activation cutoff is fixed in Donations.gs; earlier captures cannot become public donations.
+
+VCB starts “Số dư TK VCB ... -2,000 VND” but its first signed amount is a transaction, distinct from the later unsigned balance. Previous generic Gemini safeguards reject amount-context containing số dư and may classify this notification as other/uncertain. The source gap is confirmed; exact runtime drop stage still requires banklog/phone queue evidence. This fix never automatically replays the old notification or writes a family ledger row.
+
+Current checks: all 135 mock/static GAS tests pass, including VCB/MB signed-direction intake compatibility, isolated storage, dedupe/conflict/ambiguous flush, history retention and one Gemini call/fallback. No phone import, live Sheet writes, Gemini execution or production verification performed.
+
+Next: deploy only to the active isolated webhook branch/project. Update Homepage `/api/donations`, UI and handoffs in coordinated release. Verify a real transfer end-to-end without creating fake public donations. The assistant must not send money to test.
