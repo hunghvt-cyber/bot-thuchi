@@ -3,6 +3,7 @@
  * Financial routing is gated until cutover; benchmark commands remain available.
  */
 function doGet(e){
+  if(e&&e.parameter&&e.parameter.action==='homepage_donations')return donationFeedResponse_();
   if(e&&e.parameter&&(e.parameter.diagnostic==='1'||e.parameter.installReceipt==='1')){
     try{if(e.parameter.installReceipt==='1')installReceiptWebhook_();return ContentService.createTextOutput(JSON.stringify(receiptWebhookDiagnostic_())).setMimeType(ContentService.MimeType.JSON);}
     catch(err){return ContentService.createTextOutput(JSON.stringify({ok:false,error:'Không hoàn tất cấu hình receipt webhook.'})).setMimeType(ContentService.MimeType.JSON);}
@@ -10,7 +11,7 @@ function doGet(e){
   return HtmlService.createHtmlOutput('poorman-webhook-ready');
 }
 function doPost(e){
-  // This route returns before Telegram diagnostics/history; it never opens Sheets.
+  // Bank intake stays separate from normal ledger routing; the MB donation projection uses its own Sheet.
   if(e&&(e.pathInfo==='macrodroid'||e.parameter&&e.parameter.intake==='macrodroid'))return bankRelayPost_(e);
   var webhookSecret=getScriptProp_('RECEIPT_WEBHOOK_SECRET');
   if(webhookSecret&&!receiptWebhookKeyMatches_(e&&e.parameter&&e.parameter.key,webhookSecret))return HtmlService.createHtmlOutput('OK');

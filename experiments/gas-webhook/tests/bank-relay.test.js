@@ -22,7 +22,7 @@ function env(options={}){
  };
  ctx.telegramCallbackUi_=(callbackId,method,payload)=>{batches.push({callbackId,method,payload});if(options.onBatch)options.onBatch(method,payload);try{ctx.telegramApi_('answerCallbackQuery',{callback_query_id:callbackId});}catch(ignore){}return ctx.telegramApi_(method,payload);};
  vm.createContext(ctx);
- for(const f of ['BankNotifications.gs','BankAssist.gs','BankRelay.gs','BankCommit.gs','BankLearning.gs','BankCommands.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
+ for(const f of ['Donations.gs','BankNotifications.gs','BankAssist.gs','BankRelay.gs','BankCommit.gs','BankLearning.gs','BankCommands.gs','Code.gs'])vm.runInContext(fs.readFileSync(root+f,'utf8'),ctx,{filename:f});
  // Earlier focused draft-edit tests isolate parsing/display from the new commit policy.
  if(!options.autoApprove)ctx.bankAutoCommitAfterEdit_=()=>false;
  return {ctx,values,calls,props,batches,cache,stats};
