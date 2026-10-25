@@ -1,6 +1,6 @@
 # MB DONATE DRAFT — 25/10/2026
 
-Owner selected MB-only donations and public sanitized Homepage feed. Draft source in Donations.gs is disabled pending the real MB notification screenshot promised by the owner. Existing bank relay/ledger/phone behavior must remain unchanged. See DONATIONS.md; do not confuse mock test success with live activation.
+Owner supplied actual MB/VCB notification screenshot. Local deterministic parsers now handle both signs for com.VCB and com.mbmobile. Donation projection only accepts incoming MB 566766, with stable bank reference dedupe; family Telegram still receives Thu and Chi. Dedicated HomepageDonations Sheet stores sanitized JSON; Gemini thanks is once per new donation. No automatic family Transactions writes, phone edits or old event replay. 135 tests pass locally; deployment and real transfer verification are separate. See DONATIONS.md.
 
 # MACRODROID SPOOL ACK V2 — 24/10/2026
 

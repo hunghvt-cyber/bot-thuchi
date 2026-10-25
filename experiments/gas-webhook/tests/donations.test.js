@@ -5,7 +5,7 @@ function env(){
  const ctx={Date,JSON,Number,String,parseInt,Error,console,getMainSpreadsheetId:()=> 'private',bankLock_:fn=>fn(),
   SpreadsheetApp:{openById:()=>({getSheetByName:name=>{assert.equal(name,'HomepageDonations');return exists?sheet:null;},insertSheet:name=>{assert.equal(name,'HomepageDonations');exists=true;rows.length=0;return sheet;}}),flush:()=>{if(failFlush)throw Error('ambiguous');}},
   CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put:(k,v)=>cache.set(k,v),remove:k=>cache.delete(k)})},
-  sharedGeminiQuota_:()=>{},sharedGemini_:contents=>{ai++;assert.ok(!JSON.stringify(contents).includes('SECRET DONOR PROMPT'));return 'Cảm ơn đại ca! Pate đã đến, bàn phím tạm được tha.';},bankJson_:x=>x,
+  bankParse_:()=>({status:'ignored'}),sharedGeminiQuota_:()=>{},sharedGemini_:contents=>{ai++;assert.ok(!JSON.stringify(contents).includes('SECRET DONOR PROMPT'));return 'Cảm ơn đại ca! Pate đã đến, bàn phím tạm được tha.';},bankJson_:x=>x,
   appendFamilyTransaction_:()=>ledger++};
  vm.createContext(ctx);vm.runInContext(fs.readFileSync(__dirname+'/../Donations.gs','utf8'),ctx);
  return {ctx,rows,get ai(){return ai;},get ledger(){return ledger;},set failFlush(v){failFlush=v;}};
@@ -19,10 +19,10 @@ test('ambiguous Sheets flush reconciles existing donation on retry without appen
 });
 test('public history includes rolling 24h or newest 10 and contains no private fields',()=>{
  const x=env();for(let i=0;i<20;i++)x.ctx.donationStore_({...gift(i,25+i),balance:'private',raw:'private'});
- let feed=x.ctx.donationPublicFeed_();assert.equal(feed.items.length,10);assert.ok(!JSON.stringify(feed).includes('private'));assert.equal(feed.enabled,false);
+ let feed=x.ctx.donationPublicFeed_();assert.equal(feed.items.length,10);assert.ok(!JSON.stringify(feed).includes('private'));assert.equal(feed.enabled,true);
  const y=env();for(let i=0;i<25;i++)y.ctx.donationStore_(gift(i,i/2));feed=y.ctx.donationPublicFeed_();assert.equal(feed.items.length,25);
 });
-test('disabled reader does not create a Sheet and parser fails closed pending actual MB sample',()=>{
+test('disabled reader does not create a Sheet and parser fails closed for an unrecognized MB notification',()=>{
  const x=env();assert.equal(x.ctx.donationPublicFeed_().items.length,0);assert.equal(x.rows.length,1);assert.equal(x.ctx.donationFromMB_({package_name:'com.mbmobile',text:'+50000 VND'}),null);
 });
 test('one model call per durable new donation, no donor text in prompt, no financial ledger append',()=>{

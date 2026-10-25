@@ -606,3 +606,8 @@ test('spool uncertain ACK and its replay never resend Telegram or write Sheets',
  const x=env({onTelegram:()=>{throw Error('timeout');}}),e=request();e.parameter={intake:'macrodroid',ack:'2'};
  assert.match(x.ctx.doPost(e).text,/\nuncertain\n/);assert.match(x.ctx.doPost(e).text,/\nuncertain\n/);assert.equal(x.calls.length,1);
 });
+
+ test('VCB expense and MB income go to Telegram through deterministic parsers even with Gemini disabled',()=>{
+ const cases=[{package_name:'com.VCB',title:'Thông báo VCB',text:'Số dư TK VCB 123456789 -2,000 VND lúc 25-10-2026 20:10:59. Số dư 7,484,844 VND. Ref MBVCB.123456789.477383.Test transfer',direction:'Chi',bank:'VCB'},{package_name:'com.mbmobile',title:'Thông báo biến động số dư',text:'TK 56xxx766|GD: +2,000VND 25/10/26 20:11 |SD: 2,001VND|TU: TEST - 123456789|ND: MBVCB.123456789.477383.Test transfer.CT tu 123456789 TEST toi 566766 TEST tai MB- Ma GD A',direction:'Thu',bank:'MB'}];
+ for(const e of cases){const x=env({props:{BANK_RELAY_GEMINI:'NO'}});x.ctx.donationIngest_=()=>({matched:false});assert.equal(post(x,request(e)).status,'sent');assert.equal(draft(x).state.tx.direction,e.direction);assert.equal(draft(x).state.tx.amount,2000);assert.equal(draft(x).state.tx.source,e.bank);assert.equal(x.calls.filter(c=>c.method==='sendMessage').length,1);}
+ });

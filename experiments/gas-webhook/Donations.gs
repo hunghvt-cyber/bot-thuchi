@@ -1,14 +1,24 @@
 /** MB-only donation projection. No family ledger approval/write or raw notification publication. */
 var DONATE_MB_ACCOUNT_='566766';
 var DONATE_MB_PACKAGE_='com.mbmobile';
-// Remains closed until an actual owner's MB notification format is verified.
-var DONATE_MB_FORMAT_VERIFIED_=false;
+// Matched against owner-provided MB notification screenshot dated 25/10/2026.
+var DONATE_MB_FORMAT_VERIFIED_=true;
 var DONATE_SHEET_='HomepageDonations';
-var DONATE_START_AT_=Date.parse('2026-10-25T20:00:00+07:00');
+var DONATE_START_AT_=Date.parse('2026-10-25T13:29:08+00:00');
 function donationFromMB_(event){
   if(!DONATE_MB_FORMAT_VERIFIED_||event.package_name!==DONATE_MB_PACKAGE_)return null;
-  // The exact parser will be supplied from the owner's real MB notification sample.
-  return null;
+  var tx=bankParse_(event);
+  if(tx.status!=='recognized'||tx.source!=='MB'||tx.direction!=='Thu'||!tx.reference||!tx.transaction_iso)return null;
+  var original=String(tx.notification_description||'');
+  var routing=original.match(/\.CT tu\s+\d+\s+[^]+?\s+toi\s+(\d+)\s+[^]+?\s+tai\s+MB(?:\s*-\s*Ma GD[^]*)?$/iu);
+  if(tx.account_hint!==DONATE_MB_ACCOUNT_&&!(tx.account_hint==='56xxx766'&&routing&&routing[1]===DONATE_MB_ACCOUNT_))return null;
+  if(routing&&routing[1]!==DONATE_MB_ACCOUNT_)return null;
+  // The first reference is bank identity, not donor text. Never expose TU/SD/counterparty metadata.
+  var message=original.slice(tx.reference.length).replace(/^\./,'');
+  if(routing)message=message.slice(0,message.length-routing[0].length);
+  else if(/\b(?:CT tu|tai MB|SD:|TU:|DEN:)\b/iu.test(message))message='';
+  message=message.replace(/\s+/g,' ').trim().slice(0,400);
+  return {id:bankDigest_(['donation-mb-v1',DONATE_MB_ACCOUNT_,tx.reference].join('\n')),amount:tx.amount,message:message};
 }
 function donationSheet_(create){
   var ss=SpreadsheetApp.openById(getMainSpreadsheetId()),sheet=ss.getSheetByName(DONATE_SHEET_);
