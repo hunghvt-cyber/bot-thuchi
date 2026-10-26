@@ -47,9 +47,10 @@ function bankParse_(event){
     if(/^BIDV thông báo:\s*Sao kê thẻ|^Thẻ .+đã (?:kích hoạt|khóa|mở khóa)/iu.test(body))return {status:'ignored',reason:'statement_or_card_status'};
     m=body.match(/^Thẻ\s+([\dxX*•]+),\s*số tiền\s+([\d,]+)\s+VND,\s*hạn mức khả dụng tạm tính:\s*[\d,]+\s+VND;\s*([^;\r\n]+);\s*(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2})$/iu);
     if(m)return result('Chi',bankMoney_(m[2]),m[4],m[1],/^Grab\*/iu.test(m[3].trim())?'Grab':'Chi',m[3]);
-    // BIDV current-account notifications: signed amount, full multiline labels.
-    m=body.match(/^Thời gian giao dịch:\s*(\d{2}:\d{2} \d{2}\/\d{2}\/\d{4})\nTài khoản thanh toán:\s*(\d+)\nSố tiền GD:\s*([+-])([\d,]+)\s+VND(?:\nSố dư cuối:\s*[+-]?[\d,]+\s+VND)?\nNội dung giao dịch:\s*([^\n]+)(?:\nMã giao dịch:\s*([^\n]+))?$/iu);
-    if(m)return result(m[3]==='+'?'Thu':'Chi',bankMoney_(m[4]),m[1],m[2],m[5].trim().slice(0,400),m[6]);
+    // BIDV account labels may be separated by line breaks or spaces; the date may end with a dot.
+    // Restrict the money to the signed Số tiền GD field, never the account or ending balance.
+    m=body.match(/^Thời gian giao d[ịi]ch:\s*(\d{2}:\d{2} \d{2}\/\d{2}\/\d{4})\.?\s+Tài khoản thanh toán:\s*(\d+)\s+Số ti[ềể]n GD:\s*([+-])\s*([\d,]+)\s+VND(?:\s+Số dư cuối:\s*[+-]?[\d,]+\s+VND)?\s+Nội dung giao d[ịi]ch:\s*([^]+?)(?:\s+Mã giao d[ịíi]ch:\s*([^\r\n]+))?$/iu);
+    if(m&&(body.match(/Số ti[ềể]n GD:/giu)||[]).length===1)return result(m[3]==='+'?'Thu':'Chi',bankMoney_(m[4]),m[1],m[2],m[5].replace(/\s+/g,' ').trim().slice(0,400),m[6]);
   }
   if(source==='BHX'){
     m=title.match(/^Hóa đơn\s+([\d.]+)đ\s+tại Bách Hóa XANH$/iu);
@@ -61,3 +62,4 @@ function bankParse_(event){
      (source==='BHX'&&/^Hóa đơn /iu.test(title)))return {status:'review',source:source,reason:'unknown_transaction_format'};
   return {status:'ignored',reason:'not_transaction_title'};
 }
+

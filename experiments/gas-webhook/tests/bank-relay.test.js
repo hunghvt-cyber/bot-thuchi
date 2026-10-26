@@ -611,3 +611,45 @@ test('spool uncertain ACK and its replay never resend Telegram or write Sheets',
  const cases=[{package_name:'com.VCB',title:'Thông báo VCB',text:'Số dư TK VCB 123456789 -2,000 VND lúc 25-10-2026 20:10:59. Số dư 7,484,844 VND. Ref MBVCB.123456789.477383.Test transfer',direction:'Chi',bank:'VCB'},{package_name:'com.mbmobile',title:'Thông báo biến động số dư',text:'TK 56xxx766|GD: +2,000VND 25/10/26 20:11 |SD: 2,001VND|TU: TEST - 123456789|ND: MBVCB.123456789.477383.Test transfer.CT tu 123456789 TEST toi 566766 TEST tai MB- Ma GD A',direction:'Thu',bank:'MB'}];
  for(const e of cases){const x=env({props:{BANK_RELAY_GEMINI:'NO'}});x.ctx.donationIngest_=()=>({matched:false});assert.equal(post(x,request(e)).status,'sent');assert.equal(draft(x).state.tx.direction,e.direction);assert.equal(draft(x).state.tx.amount,2000);assert.equal(draft(x).state.tx.source,e.bank);assert.equal(x.calls.filter(c=>c.method==='sendMessage').length,1);}
  });
+
+
+// 26/10: BIDV interest notification and Telegram notification minimum.
+function bidvInterest(amount='14',sign='+'){
+ return sample('com.vnpay.bidv','Thông báo BIDV','Thời gian giao dịch: 01:23 26/10/2026.\nTài khoản thanh toán: 1111222233\nSố tiền GD: '+sign+amount+' VND\nSố dư cuối: 95,324 VND\nNội dung giao dịch: Thanh toan lai thang 10/2026\nMã giao dịch: SAMPLE-REF-1');
+}
+test('BIDV interest parses punctuation, flattened/multiline labels and 14 exact dong without Gemini',()=>{
+ for(const variant of [e=>e,e=>({...e,text:e.text.replace(/\n/g,' ')}),e=>({...e,text:e.text.replace(/\n/g,'\r\n')}),e=>({...e,text:e.text.replace(/\n/g,'\n\n')}),e=>({...e,text:e.text.replace('giao dịch:','giao dich:').replace('Số tiền','Số tiển').replace('Mã giao dịch','Mã giao dích')})]){
+  const x=env(),usage=withAI(x),e=variant(bidvInterest()),t=x.ctx.bankDetect_(e);
+  assert.equal(t.status,'recognized');assert.equal(t.amount,14);assert.equal(t.direction,'Thu');assert.equal(t.description,'Thanh toan lai thang 10/2026');assert.equal(t.reference,'SAMPLE-REF-1');assert.equal(t.transaction_iso,'2026-10-26T01:23:00+07:00');assert.equal(usage.length,0);
+ }
+});
+test('BIDV fee amount remains signed and date/balance/malformed money cannot replace it',()=>{
+ const x=env();assert.equal(x.ctx.bankParse_(bidvInterest('1,000','-')).direction,'Chi');
+ for(const e of [({...bidvInterest(),text:bidvInterest().text.replace('26/10/2026','31/02/2026')}),bidvInterest('1,00'),({...bidvInterest(),text:bidvInterest().text.replace('Số tiền GD: +14 VND','Số tiền GD: VND')}),({...bidvInterest(),text:bidvInterest().text.replace('Nội dung giao dịch:','Số tiền GD: -2,000 VND\nNội dung giao dịch:')})])assert.equal(x.ctx.bankParse_(e).status,'review');
+});
+test('under 1000 exact VND is acknowledged ignored without Telegram or Sheets; 1000 remains visible',()=>{
+ for(const sign of ['+','-'])for(const n of [14,999,1000,1001]){
+  const x=env(),usage=withAI(x),e=request(bidvInterest(String(n),sign));
+  const r=post(x,e);assert.equal(r.status,n<1000?'ignored':'sent');assert.equal(x.calls.length,n<1000?0:1);assert.equal(usage.length,0);
+  if(n<1000){assert.equal(r.reason,'below_notification_minimum');assert.equal(draft(x).state.tx.amount,n);assert.equal(post(x,e).status,'ignored');assert.equal(x.calls.length,0);}
+ }
+});
+test('notification minimum applies to VIB VCB and MB both directions, never to ending balance',()=>{
+ for(const sign of ['+','-'])for(const e of [
+  sample(undefined,undefined,'Tài khoản •••• 1111, phát sinh '+sign+'999 ₫ vào lúc 11:48 22/10/2026. Số dư: 95,324 ₫'),
+  sample('com.VCB','Thông báo VCB','Số dư TK VCB 1111222233 '+sign+'999 VND lúc 26-10-2026 01:23:00. Số dư 95,324 VND. Ref MBVCB.12345.67890.Test'),
+  sample('com.mbmobile','Thông báo biến động số dư','TK 11xxx333|GD: '+sign+'999VND 26/10/26 01:23|SD: 95,324VND|ND: SAMPLE.12345.67890.Test')
+ ]){const x=env();assert.equal(post(x,request(e)).status,'ignored');assert.equal(x.calls.length,0);}
+ const x=env(),e=bidvInterest('2,000');e.text=e.text.replace('95,324','14');assert.equal(post(x,request(e)).status,'sent');assert.equal(draft(x).state.tx.amount,2000);
+});
+test('validated Gemini result under minimum is ignored; uncertain amount is still a review',()=>{
+ const e=sample('com.example.newbank','Thông báo giao dịch','Giao dịch ghi có +999 VND. Số dư 95,324 VND');
+ const x=env(),usage=withAI(x,{kind:'transaction',amount:999,amount_text:'999',amount_context:'Giao dịch ghi có +999 VND',direction:'Thu',direction_context:'ghi có +999 VND',currency:'VND',source:'Bank mới',description:'Lãi',category:'Khác'});
+ assert.equal(post(x,request(e)).status,'ignored');assert.equal(x.calls.length,0);assert.equal(usage.length,1);
+ const y=env();withAI(y,{kind:'uncertain'});assert.equal(post(y,request(e)).status,'sent');assert.equal(draft(y).state.tx.status,'review');
+});
+test('small transaction ACK2 stays terminal and bound to exact request bytes',()=>{
+ const x=env(),e=request(bidvInterest());e.parameter={intake:'macrodroid',ack:'2'};delete e.pathInfo;
+ const raw=x.ctx.doPost(e).text;const digest=crypto.createHash('sha256').update(e.postData.contents).digest('hex');
+ assert.equal(raw,'BANK-ACK-2\n'+digest+'\nignored\nEND_BANK_ACK_2\n');assert.equal(x.ctx.doPost(e).text,raw);assert.equal(x.calls.length,0);
+});
