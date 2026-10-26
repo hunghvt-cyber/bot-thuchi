@@ -1,5 +1,6 @@
 /** Intake creates drafts only; ledger writes require separate owner approval. */
 var BANK_TTL_=48*3600000;
+var BANK_NOTIFICATION_MIN_AMOUNT_=1000;
 var BANK_DRAFT_MARKER_='🧪 Nháp ngân hàng';
 function bankIsDraftText_(text){text=String(text||'');return text.indexOf(BANK_DRAFT_MARKER_)===0||text.indexOf('🧪 BANK_DRAFT_V1')===0;}
 function bankAmountText_(amount){return Number.isSafeInteger(amount)&&amount>0?String(amount).replace(/\B(?=(\d{3})+(?!\d))/g,'.')+'đ':'Chưa rõ số tiền';}
@@ -94,7 +95,13 @@ function bankRelayPost_(e){
     });
     if(claimed.existing)return reply({ok:claimed.existing.status==='sent'||claimed.existing.status==='ignored',status:claimed.existing.status==='sent'?'duplicate_sent':claimed.existing.status,event_id:claimed.existing.id});
     state=claimed.state;
-    tx=bankDetect_(event);state.tx=tx;bankLearnStart_(state,tx);
+    tx=bankDetect_(event);
+    // Telegram draft policy only: exact recognized amount, regardless of bank/direction/parser.
+    // Unknown amounts remain review drafts. Donation projection and manual entries are separate.
+    if(tx.status==='recognized'&&Number.isSafeInteger(tx.amount)&&tx.amount>0&&tx.amount<BANK_NOTIFICATION_MIN_AMOUNT_){
+      tx.status='ignored';tx.reason='below_notification_minimum';
+    }
+    state.tx=tx;bankLearnStart_(state,tx);
     if(tx.status==='ignored'){state.status='ignored';bankLock_(function(){cfg.props.setProperty(key,JSON.stringify(state));});return reply({ok:true,status:'ignored',reason:tx.reason});}
     bankLock_(function(){cfg.props.setProperty(key,JSON.stringify(state));});
     try{
@@ -176,3 +183,4 @@ function handleBankDraftReply_(msg){
   }catch(err){try{bankReplyNote_(msg,'Chưa hoàn tất cập nhật bản nháp, thử lại sau.');}catch(ignore){}}
   return true;
 }
+

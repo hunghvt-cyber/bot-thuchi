@@ -17,6 +17,7 @@ function bankDetect_(event){
       '"direction":"Thu|Chi|null","direction_context":"trích đoạn nguyên văn chứng minh chiều",'+
       '"currency":"VND|null","source":"tên ngân hàng ngắn","description":"mục đích hoặc Không rõ mục đích","category":"danh mục"}. '+
       'Không lấy số dư, hạn mức, dư nợ, tiền tối thiểu, quảng cáo, sao kê hay đơn hàng chưa trả tiền thành giao dịch. '+
+      'Với BIDV, trường Số tiền GD là tiền giao dịch; Số dư cuối là số dư, không phải số tiền giao dịch. Dấu + là Thu, dấu - là Chi. Giữ đúng số đồng, kể cả dưới 1000, không làm tròn hay nhân nghìn. '+
       'Không suy chiều từ chữ THU PHI: đó thường là chi. Chuyển khoản nội bộ vẫn chỉ nhận diện chiều tiền, không suy mục đích. '+
       'Thiếu mục đích: description=Không rõ mục đích,category=Khác. Thiếu bằng chứng số tiền/chiều: kind=uncertain. '+
       'amount_text chỉ chứa số và dấu phân cách hàng nghìn, không đổi đơn vị, không tự tính. '+
@@ -141,3 +142,4 @@ function bankNavigate_(cb,match,ack){
   }catch(err){ack('Chưa hoàn tất, thử lại sau.');}
   return true;
 }
+
