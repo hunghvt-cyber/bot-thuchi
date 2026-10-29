@@ -28,7 +28,7 @@ function bankParse_(event){
   }
   if(source==='VCB'&&title==='Thông báo VCB'){
     // VCB calls the whole alert “Số dư TK”, but the first SIGNED amount is the transaction.
-    m=body.match(/^Số dư TK VCB\s+(\d+)\s+([+-])([\d,]+)\s*VND\s+lúc\s+(\d{2})-(\d{2})-(\d{4})\s+(\d{2}:\d{2}:\d{2})\.\s*Số dư\s+[\d,]+\s*VND\.\s*Ref\s+([^]+)$/iu);
+    m=body.match(/^Số d[uư] TK VCB\s+(\d+)\s+([+-])([\d,]+)\s*VND\s+lúc\s+(\d{2})-(\d{2})-(\d{4})\s+(\d{2}:\d{2}:\d{2})\.\s*Số dư\s+[\d,]+\s*VND\.\s*Ref\s+([^]+)$/iu);
     if(m){var vcbRef=m[8].trim(),vcbId=(vcbRef.match(/^([A-Za-z0-9]+(?:\.[0-9]+){2})(?:\.|$)/)||[])[1]||'';
       return result(m[2]==='+'?'Thu':'Chi',bankMoney_(m[3]),m[4]+'/'+m[5]+'/'+m[6]+' '+m[7],m[1],vcbRef.slice(0,400),vcbId);}
   }
