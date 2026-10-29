@@ -653,3 +653,18 @@ test('small transaction ACK2 stays terminal and bound to exact request bytes',()
  const raw=x.ctx.doPost(e).text;const digest=crypto.createHash('sha256').update(e.postData.contents).digest('hex');
  assert.equal(raw,'BANK-ACK-2\n'+digest+'\nignored\nEND_BANK_ACK_2\n');assert.equal(x.ctx.doPost(e).text,raw);assert.equal(x.calls.length,0);
 });
+
+test('VCB du/dư first-label spelling accepts 900000 debit, preserves wrapped ref and excludes 21549 balance',()=>{
+ for(const label of ['Số du','Số dư'])for(const sign of ['-','+']){
+  const x=env({props:{BANK_RELAY_GEMINI:'NO'}});
+  const body=label+' TK VCB 1111222233 '+sign+'900,000 VND lúc 29-10-2026 15:51:30. Số dư 21,549 VND. Ref MBVCB.16771865405.6302BFTVG L8KKU17.TEST chuyen tien.CT tu 1111222233 TEST toi 2222333344 TEST tai NAM A BANK';
+  const e=sample('com.VCB','Thông báo VCB',body),t=x.ctx.bankParse_(e);
+  assert.equal(t.status,'recognized');assert.equal(t.amount,900000);assert.equal(t.direction,sign==='-'?'Chi':'Thu');assert.equal(t.transaction_iso,'2026-10-29T15:51:30+07:00');assert.ok(t.description.includes('6302BFTVG L8KKU17'));
+  assert.equal(post(x,request(e)).status,'sent');assert.equal(draft(x).state.tx.amount,900000);
+  const multiline={...e,text:body.replace('L8KKU17','\nL8KKU17')};assert.equal(x.ctx.bankParse_(multiline).amount,900000);
+ }
+});
+test('VCB missing accent never relaxes signed money or calendar checks',()=>{
+ const x=env(),raw='Số du TK VCB 1111222233 -900,000 VND lúc 29-10-2026 15:51:30. Số dư 21,549 VND. Ref SAMPLE.12345.67890.Test';
+ for(const body of [raw.replace('-900,000','900,000'),raw.replace('-900,000','-9,00,000'),raw.replace('29-10-2026','31-02-2026')])assert.equal(x.ctx.bankParse_(sample('com.VCB','Thông báo VCB',body)).status,'review');
+});
